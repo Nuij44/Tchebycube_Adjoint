@@ -140,7 +140,7 @@ program tcheby_1d
      OPEN(UNIT=101, FILE=trim(root_dir)//'/modal_nrj_azimutal/ua.dat')
      OPEN(UNIT=102, FILE=trim(root_dir)//'/modal_nrj_azimutal/uz.dat')
      OPEN(UNIT=103, FILE=trim(root_dir)//'/modal_nrj_azimutal/ur.dat')
-     OPEN(UNIT=111, FILE=trim(root_dir)//'/modal_nrj_vertcial/ua.dat')
+     OPEN(UNIT=111, FILE=trim(root_dir)//'/modal_nrj_vertical/ua.dat')
      OPEN(UNIT=112, FILE=trim(root_dir)//'/modal_nrj_vertical/uz.dat')
      OPEN(UNIT=113, FILE=trim(root_dir)//'/modal_nrj_vertical/ur.dat')
 
