@@ -16,16 +16,19 @@
 !h5conv_cyl.py
 
 !Taylor_Couette/*.f90
+!Taylor_Couette/*.slurm
 !Taylor_Couette/*.py
 !Taylor_Couette/*.in
 !Taylor_Couette/CMakeLists.txt
 
 !Enstrophy_TC/*.f90
+!Enstrophy_TC/*.slurm
 !Enstrophy_TC/*.py
 !Enstrophy_TC/*.in
 !Enstrophy_TC/CMakeLists.txt
 
 !lin_TC/*.f90
+!lin_TC/*.slurm
 !lin_TC/*.py
 !lin_TC/*.in
 !lin_TC/CMakeLists.txt
