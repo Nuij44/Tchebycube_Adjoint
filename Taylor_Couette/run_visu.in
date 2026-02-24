@@ -31,7 +31,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = '2Z_RE_10000/cond_init/init_6.h5'
+init_file = 'Data/2Z_RE_10000/cond_init/init_6.h5'
 /
 
 

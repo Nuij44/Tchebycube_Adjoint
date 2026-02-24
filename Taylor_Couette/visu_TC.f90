@@ -126,6 +126,8 @@ program tcheby_1d
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//trim(snap_dir) )
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/vorticity' )
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/spectre' )
+     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/modal_nrj_azimutal' )
+     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/modal_nrj_vertical' )
      write(*,parameters_cube)
      write(*,parameters_physical)
      write(*,parameters_diagnostics)
@@ -135,6 +137,13 @@ program tcheby_1d
      OPEN(UNIT=70, FILE=trim(root_dir)//'r_vect.dat')
      OPEN(UNIT=80, FILE=trim(root_dir)//'/spectre/azimut.dat')
      OPEN(UNIT=90, FILE=trim(root_dir)//'/spectre/vertic.dat')
+     OPEN(UNIT=101, FILE=trim(root_dir)//'/modal_nrj_azimutal/ua.dat')
+     OPEN(UNIT=102, FILE=trim(root_dir)//'/modal_nrj_azimutal/uz.dat')
+     OPEN(UNIT=103, FILE=trim(root_dir)//'/modal_nrj_azimutal/ur.dat')
+     OPEN(UNIT=111, FILE=trim(root_dir)//'/modal_nrj_vertcial/ua.dat')
+     OPEN(UNIT=112, FILE=trim(root_dir)//'/modal_nrj_vertical/uz.dat')
+     OPEN(UNIT=113, FILE=trim(root_dir)//'/modal_nrj_vertical/ur.dat')
+
   end if
 
   
@@ -415,15 +424,6 @@ program tcheby_1d
      
      J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
-     CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
-     CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
-     
-     if (nrank==0) then
-        write(42,*)TC,J_U
-        write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_AZI
-        write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_VER
-        write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP
-     end if
 
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
      
@@ -434,6 +434,41 @@ program tcheby_1d
      end if
 
      if (mod(it_time,1000)==1) then
+
+        CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
+        CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
+        
+        if (nrank==0) then
+           write(42,*)TC,J_U
+           write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_AZI
+           write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_VER
+           write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP
+        end if
+        
+        CALL AZIMUT_MOD_SCAL(UA,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UA,E_VER,max_mod)
+     
+        if (nrank == 0) then
+           write(101,'(15(e15.8))')TC,E_AZI
+           write(111,'(15(e15.8))')TC,E_VER
+        end if
+        
+        CALL AZIMUT_MOD_SCAL(UZ,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UZ,E_VER,max_mod)
+        
+        if (nrank == 0) then
+           write(102,'(15(e15.8))')TC,E_AZI
+           write(112,'(15(e15.8))')TC,E_VER
+        end if
+
+        CALL AZIMUT_MOD_SCAL(UR,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UR,E_VER,max_mod)
+        
+        if (nrank == 0) then
+           write(103,'(15(e15.8))')TC,E_AZI
+           write(113,'(15(e15.8))')TC,E_VER
+        end if
+
         filename = trim(base_snap)//'grid.h5'
         call update_id_and_time(trim(filename),snap_dt,snap_id)
         WRITE(num,'(I6.6)')snap_id
@@ -502,6 +537,30 @@ contains
 
   end SUBROUTINE azimut_mod
 
+    SUBROUTINE azimut_mod_scal(U,E_azi,max_mod)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: U
+    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_azi
+    INTEGER,intent(in) :: max_mod
+
+    type(C_PTR) :: plan
+    INTEGER :: m
+
+    DGA = UA
+    call c2c_1m_x(DGA,plan_fwd_x)
+    
+    E_azi = 0._DP
+    do m = 0,max_mod-1
+       do k = PH%XST(3), PH%XEN(3)
+          do j = PH%XST(2), PH%XEN(2)
+             E_azi(m) = E_azi(m) + ABS(DGA(m+1,j,k))**2
+          end do
+       end do
+    end do
+
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_azi,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
+
+  end SUBROUTINE azimut_mod_scal
+
 
   SUBROUTINE vertic_mod(UA,UZ,UR,E_ver,max_mod)
     REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: UA,UZ,UR
@@ -535,6 +594,34 @@ contains
     CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_ver,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
 
   end SUBROUTINE vertic_mod
+
+  SUBROUTINE vertic_mod_scal(U,E_ver,max_mod)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: U
+    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_ver
+    INTEGER,intent(in) :: max_mod
+
+    type(C_PTR) :: plan
+    INTEGER :: m
+    
+    DGA = U
+
+    call transpose_x_to_y(DGA, DGA_Y)
+    
+    call c2c_1m_y(DGA_Y,plan_fwd_y)
+
+    E_ver = 0._DP
+    do m = 0,max_mod-1
+       do k = PH%YST(3), PH%YEN(3)
+          do i = PH%YST(1), PH%YEN(1)
+             E_ver(m) = E_ver(m) + ABS(DGA_Y(i,m+1,k))**2
+          end do
+       end do
+    end do
+
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_ver,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
+    
+  end SUBROUTINE vertic_mod_scal
+
   
   function get_is_b(halo) result(res)
         implicit none
