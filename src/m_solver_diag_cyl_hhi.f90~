@@ -1,0 +1,1371 @@
+module m_solver_diag_cyl_hhi
+  use M_FOURIER_TRANSFORM
+    
+  implicit none
+  ! nu
+  type t_solver_diag_cyl_hhi
+     
+     integer :: n(3)
+     integer :: xst(3),xen(3)  ! x-distributed array size 
+     integer :: yst(3),yen(3)  ! y-distributed array size 
+     integer :: zst(3),zen(3)  ! z-distributed array size 
+     
+     REAL(KIND=8) :: nu(3), sigma ! diffusion coefficient
+     integer :: axis 
+
+
+     
+     REAL(KIND=8) :: alf_l_z,bet_l_z 
+     REAL(KIND=8) :: alf_r_z,bet_r_z 
+     
+     REAL(KIND=8), dimension(:,:)  , allocatable :: bc_val_l_z
+     REAL(KIND=8), dimension(:,:)  , allocatable :: bc_val_r_z
+     
+     COMPLEX(KIND=8), dimension(:)  , allocatable :: LBDX ! 
+     COMPLEX(KIND=8), dimension(:)  , allocatable :: LBDY !
+
+     
+     ! take care here 
+     COMPLEX(KIND=8), dimension(:,:,:), allocatable :: PZ,PZM1
+     COMPLEX(KIND=8), dimension(:,:)  , allocatable :: LBDZ
+     REAL(KIND=8)   , dimension(:,:)  , allocatable :: FLZ,FRZ
+     COMPLEX(KIND=8), dimension(:,:)  , allocatable :: CCZ     
+
+     REAL(KIND=8) :: clz(2,2)
+
+
+     !> 
+     COMPLEX(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: PZ_,PZM1_
+     COMPLEX(KIND=8), DIMENSION(:,:), ALLOCATABLE :: VPZ_
+     
+
+     
+   contains
+
+     PROCEDURE :: SOLVE => IFCE_SOLVE
+     PROCEDURE :: SOLVE_POISSON => IFCE_SOLVE_POISSON
+     PROCEDURE :: INITIALISE => IFCE_INITIALISE
+     PROCEDURE :: INITIALISE_SVV => IFCE_INITIALISE_SVV
+     PROCEDURE :: SET_BCS => SOLVER_DIAG_CYL_HHI_SET_BCS
+     PROCEDURE :: SET_BVS => SOLVER_DIAG_CYL_HHI_SET_BVS
+     PROCEDURE :: SET_UBVS => SOLVER_DIAG_CYL_HHI_SET_UNSTEADY_BVS
+     PROCEDURE :: SET_PARAMS => SOLVER_DIAG_CYL_HHI_SET_PARAMS
+
+     
+  end type t_solver_diag_cyl_hhi
+  
+  COMPLEX(KIND=8), dimension(:,:,:), allocatable :: dg_cl_z
+  REAL(KIND=8), dimension(:,:,:), allocatable :: LBD
+  
+contains
+
+  ! common interface for 
+
+
+  subroutine ifce_initialise(this,grid,opx,opy,opz,ph)
+    use m_mesh_base
+    use m_operator_tcheby
+    use m_operator_fourier_dft
+    use decomp_2d
+    implicit none
+    class(t_solver_diag_cyl_hhi):: this
+    type(t_mesh_base)            :: grid(3)
+    type(t_operator_fourier_dft) :: opx,opy
+    type(t_operator_tcheby)      :: opz
+    
+    real(kind=8) :: sigma
+    real(kind=8) :: nu(3),bcl(3,2),bcr(3,2)
+    integer :: n(3)
+    type(decomp_info) :: ph
+
+    ! get the global size. ni := nx+1 
+    n = [ph%xen(1)-ph%xst(1),ph%yen(2)-ph%yst(2),ph%zen(3)-ph%zst(3)]
+    BCL = 0
+    BCR = 0
+    THIS%N = N
+    BCL(3,1:2) = [ THIS%ALF_L_Z , THIS%BET_L_Z ]
+    BCR(3,1:2) = [ THIS%ALF_R_Z , THIS%BET_R_Z ]
+    
+    CALL SOLVER_DIAG_HHI_BUILD (THIS, &
+         GRID(1)%X, THIS%NU(1), THIS%N(1), PH%XST,  PH%XEN, &
+         GRID(2)%X, THIS%NU(2), THIS%N(2), PH%YST,  PH%YEN, &
+         GRID(3)%X, THIS%NU(3), THIS%N(3), PH%ZST,  PH%ZEN, OPZ%GET_D2(), OPZ%GET_D1(), BCL(3,:), BCR(3,:)  )
+    
+  end subroutine ifce_initialise
+
+
+  subroutine ifce_initialise_svv(this,grid,opx,opy,opz,alpha,beta,ph)
+    use m_mesh_base
+    use m_operator_tcheby
+    use m_operator_fourier_dft
+    use decomp_2d
+    implicit none
+    class(t_solver_diag_cyl_hhi):: this
+    type(t_mesh_base)            :: grid(3)
+    type(t_operator_fourier_dft) :: opx,opy
+    type(t_operator_tcheby)      :: opz
+    
+    real(kind=8) :: sigma,alpha,beta
+    real(kind=8) :: nu(3),bcl(3,2),bcr(3,2)
+    integer :: n(3)
+    type(decomp_info) :: ph
+
+    ! get the global size. ni := nx+1 
+    n = [ph%xen(1)-ph%xst(1),ph%yen(2)-ph%yst(2),ph%zen(3)-ph%zst(3)]
+    BCL = 0
+    BCR = 0
+    THIS%N = N
+    BCL(3,1:2) = [ THIS%ALF_L_Z , THIS%BET_L_Z ]
+    BCR(3,1:2) = [ THIS%ALF_R_Z , THIS%BET_R_Z ]
+    
+    CALL SOLVER_DIAG_HHI_BUILD_SVV (THIS, &
+         GRID(1)%X, THIS%NU(1), THIS%N(1), PH%XST,  PH%XEN, &
+         GRID(2)%X, THIS%NU(2), THIS%N(2), PH%YST,  PH%YEN, &
+         GRID(3)%X, THIS%NU(3), THIS%N(3), PH%ZST,  PH%ZEN, OPZ%GET_D2(), OPZ%GET_D1(), BCL(3,:), BCR(3,:),alpha,beta  )
+    
+  end subroutine ifce_initialise_svv
+
+  
+  
+  subroutine build(this,grid,opx,opy,opz,sigma,nu,bcl,bcr,ph,n)
+    use m_mesh_base
+    use m_operator_tcheby
+    use m_operator_fourier
+    use decomp_2d
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    type(t_mesh_base)        :: grid(3)
+    type(t_operator_fourier) :: opx,opy
+    type(t_operator_tcheby)  :: opz
+    
+    real(kind=8) :: sigma
+    real(kind=8) :: nu(3),bcl(3,2),bcr(3,2)
+    integer :: n(3)
+    type(decomp_info) :: ph
+    
+    
+    call solver_diag_hhi_build (this, &
+         grid(1)%x, nu(1), n(1), ph%xst,  ph%xen, &
+         grid(2)%x, nu(2), n(2), ph%yst,  ph%yen, &
+         grid(3)%x, nu(3), n(3), ph%zst,  ph%zen, opz%get_d2(), opz%get_d1(), bcl(3,:), bcr(3,:)  )
+    
+  end subroutine build
+  
+
+  subroutine set_bval(this,grid,udf_bc_left,udf_bc_right,ph)
+    use m_mesh_base
+    use decomp_2d
+
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    type(t_mesh_base)        :: grid(3)
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_LEFT
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_RIGHT
+    type(decomp_info) :: ph
+    
+    call solver_diag_hhi_set_boundary_field(&
+         grid(1)%x, grid(2)%x, grid(3)%x, udf_bc_left, udf_bc_right, &
+         this%bc_val_l_z, this%bc_val_r_z, ph%xst, ph%xen, ph%yst, ph%yen, ph%zst, ph%zen )
+    
+  end subroutine set_bval
+
+  subroutine set_bval_unsteady(this,tc,grid,udf_bc_left,udf_bc_right,ph)
+    use m_mesh_base
+    use decomp_2d
+
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    type(t_mesh_base)        :: grid(3)
+    real(kind=8) :: tc
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_LEFT
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_RIGHT
+    type(decomp_info) :: ph
+    
+    call solver_diag_hhi_set_unsteady_boundary_field(&
+         grid(1)%x, grid(2)%x, grid(3)%x, tc, udf_bc_left, udf_bc_right, &
+         this%bc_val_l_z, this%bc_val_r_z, ph%xst, ph%xen,ph%yst, ph%yen,ph%zst, ph%zen )
+    
+  end subroutine set_bval_unsteady
+
+  
+  
+
+  subroutine ifce_solve(this,fi,sfi,sigma,ph)
+    use decomp_2d
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    real(kind=8),dimension(:,:,:),allocatable :: fi,sfi
+    real(kind=8) :: sigma
+    integer :: n(3)
+    type(decomp_info) :: ph
+
+
+    call solver_diag_cyl_hhi_solve(fi,sfi,sigma,&
+         this%lbdx, this%n(1), ph%xst, ph%xen, &
+         this%lbdy, this%n(2), ph%yst, ph%yen, &
+         this%lbdz, this%n(3), ph%zst, ph%zen, this%pz,  this%pzm1,  &
+         this%clz, this%ccz,  this%flz,  this%frz, this%bc_val_l_z, this%bc_val_r_z)
+      
+  end subroutine ifce_solve
+
+
+
+  subroutine ifce_solve_poisson(this,fi,sfi,nu,ph)
+    use decomp_2d
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    real(kind=8),dimension(:,:,:),allocatable :: fi,sfi
+    real(kind=8) :: nu(3)
+    integer :: n(3)
+    type(decomp_info) :: ph
+
+
+    call solver_diag_cyl_hhi_solve_poisson(fi,sfi,&
+         nu(1),this%lbdx, this%n(1), ph%xst, ph%xen, &
+         nu(2),this%lbdy, this%n(2), ph%yst, ph%yen, &
+         nu(3),this%lbdz, this%n(3), ph%zst, ph%zen, this%pz,  this%pzm1,  &
+         this%clz, this%ccz,  this%flz,  this%frz, this%bc_val_l_z, this%bc_val_r_z)
+      
+  end subroutine ifce_solve_poisson
+
+  
+  SUBROUTINE SOLVER_DIAG_CYL_HHI_SET_BVS(THIS,MESH,AXIS,UDF_MINUS,UDF_PLUS)
+    use decomp_2d
+    use m_mesh_base
+    use mpi
+    IMPLICIT NONE
+    CLASS(T_SOLVER_DIAG_CYL_HHI) :: THIS
+    TYPE(T_MESH_BASE)             :: MESH(3)
+    INTEGER                       :: AXIS
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_PLUS
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_MINUS
+      
+    TYPE(DECOMP_INFO) :: PH
+    REAL(KIND=8) :: TIME
+    integer :: ierr
+      
+    CALL GET_DECOMP_INFO(PH)
+    
+    
+    if (axis==3) then
+       
+       CALL SOLVER_DIAG_HHI_SET_BOUNDARY_FIELD(&
+            MESH(1)%X, MESH(2)%X, MESH(3)%X, &
+            UDF_MINUS,UDF_PLUS,THIS%BC_VAL_L_Z,THIS%BC_VAL_R_Z,PH%XST,PH%XEN,PH%YST,PH%YEN,PH%ZST,PH%ZEN)
+    else
+       
+       call MPI_Abort(mpi_comm_world,0,ierr)
+    end if
+  end subroutine SOLVER_DIAG_CYL_HHI_SET_BVS
+
+  SUBROUTINE SOLVER_DIAG_CYL_HHI_SET_UNSTEADY_BVS(THIS,TC,MESH,AXIS,UDF_MINUS,UDF_PLUS)
+    use decomp_2d
+    use m_mesh_base
+    use mpi
+    IMPLICIT NONE
+    CLASS(T_SOLVER_DIAG_CYL_HHI) :: THIS
+    REAL(KIND=8)                  :: TC
+    TYPE(T_MESH_BASE)             :: MESH(3)
+    INTEGER                       :: AXIS
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_PLUS
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_MINUS
+      
+    TYPE(DECOMP_INFO) :: PH
+    REAL(KIND=8) :: TIME
+    integer :: ierr
+      
+    CALL GET_DECOMP_INFO(PH)
+    
+    
+    if (axis==3) then
+       
+       CALL SOLVER_DIAG_HHI_SET_UNSTEADY_BOUNDARY_FIELD(&
+            MESH(1)%X, MESH(2)%X, MESH(3)%X, TC, &
+            UDF_MINUS,UDF_PLUS,THIS%BC_VAL_L_Z,THIS%BC_VAL_R_Z,&
+            PH%XST,PH%XEN,PH%YST,PH%YEN,PH%ZST,PH%ZEN )
+    else
+       
+       call MPI_Abort(mpi_comm_world,0,ierr)
+    end if
+  end subroutine SOLVER_DIAG_CYL_HHI_SET_UNSTEADY_BVS
+
+
+
+  
+
+  SUBROUTINE SOLVER_DIAG_CYL_HHI_SET_BCS(THIS,AXIS,BCS_MINUS,BCS_PLUS)
+    use decomp_2d
+    use mpi
+    IMPLICIT NONE
+    CLASS(T_SOLVER_DIAG_CYL_HHI) :: THIS
+    INTEGER                       :: AXIS
+    real(kind=8)                  :: BCS_MINUS(2)
+    real(kind=8)                  :: BCS_PLUS(2)
+    integer :: ierr
+    TYPE(DECOMP_INFO) :: PH
+    
+    CALL GET_DECOMP_INFO(PH)
+    IF ((AXIS==1).OR.(AXIS==2)) THEN
+
+       CALL MPI_ABORT(MPI_COMM_WORLD,0,IERR)
+
+    ELSE IF (AXIS==3) THEN
+       
+       THIS%ALF_L_Z = BCS_MINUS(1)
+       THIS%BET_L_Z = BCS_MINUS(2)
+
+       THIS%ALF_R_Z = BCS_PLUS(1)
+       THIS%BET_R_Z = BCS_PLUS(2)
+
+    END IF
+
+    
+  end subroutine SOLVER_DIAG_CYL_HHI_SET_BCS
+
+  
+  SUBROUTINE SOLVER_DIAG_CYL_HHI_SET_PARAMS(THIS,NU,SIGMA,axis)
+    IMPLICIT NONE
+    CLASS(T_SOLVER_DIAG_CYL_HHI) :: THIS
+    REAL(KIND=8) :: NU(3)
+    REAL(KIND=8) :: SIGMA
+    integer :: axis
+
+    THIS%NU = NU
+    THIS%SIGMA = SIGMA
+    THIS%AXIS = axis
+    
+  END SUBROUTINE SOLVER_DIAG_CYL_HHI_SET_PARAMS
+
+
+  !> basic routine 
+
+
+
+
+
+
+  
+  subroutine reduction_operator(D2,BL,BR,P,PM1,LBD,CL,CC,FL,FR,N)
+    use m_numerics
+    implicit none
+    !... args in
+    integer :: n
+    real(kind=8),intent(in) :: d2(1:n+1,1:n+1)
+    real(kind=8),intent(in) :: bl(1:n+1,1:n+1)
+      real(kind=8),intent(in) :: br(1:n+1,1:n+1)
+      !... args out
+      real(kind=8),intent(out) :: P(1:N+1,1:N+1),PM1(1:N+1,1:N+1)
+      real(kind=8),intent(out) :: LBD(1:N+1)
+      real(kind=8),intent(out) :: FL(1:N+1),FR(1:N+1)
+      real(kind=8),intent(out) :: CL(1:2,1:2),CC(1:2,1:N+1)
+      !... variables
+      real(kind=8) :: D2_(2:N,2:N)
+      real(kind=8) :: P_(2:N,2:N),PM1_(2:N,2:N)
+      real(kind=8) :: LBD_(2:N)
+      
+      integer :: i,j
+      
+      ! inverse of cl attention au det
+      ! CL(1,1:2) = BL(0,0) , BL(0,N)
+      ! CL(2,1:2) = BR(N,0) , BR(N,N)
+      
+      cl(1,1:2) = [   br(n+1,n+1) , - bl(1,n+1) ]
+      cl(2,1:2) = [ - br(n+1,  1) ,   bl(1,  1) ] 
+      cl = cl / ( bl(1,1)*br(n+1,n+1) - br(n+1,1)*bl(1,n+1)  )
+      
+      forall(i=2:n,j=2:n)
+         d2_(i,j) = d2(i,j) &
+              - d2(i,1  )*( cl(1,1)*bl(1,j) + cl(1,2)*br(n+1,j)  ) &
+              - d2(i,n+1)*( cl(2,1)*bl(1,j) + cl(2,2)*br(n+1,j)  ) 
+      end forall
+      
+      call diagonalise_real( d2_(2:n,2:n), p_(2:n,2:n), pm1_(2:n,2:n), lbd_(2:n), n-1 )
+      
+      
+      p=0
+      pm1=0
+      !> 
+      forall(i=1:n+1) p(i,i) = 1d0
+      forall(i=1:n+1) pm1(i,i) = 1d0
+      
+      forall(i=2:n,j=2:n)
+         p(i,j) = p_(i,j)
+         pm1(i,j) = pm1_(i,j)
+      end forall
+      
+      CC(1,  1) = 1
+      CC(1,2:n) = -bl(1,2:n)
+      CC(1,n+1) = 0
+      
+      CC(2,  1) = 0
+      CC(2,2:n) = -br(n+1,2:n)
+      CC(2,n+1) = 1
+      
+      
+      forall(i=1:n+1) lbd(i) = 1e16 
+      forall(i=2:n  ) lbd(i) = lbd_(i)
+      
+      forall(i=2:n)
+         fl(i) = d2(i,1)*cl(1,1) + d2(i,n+1)*cl(2,1)
+         fr(i) = d2(i,1)*cl(1,2) + d2(i,n+1)*cl(2,2)
+      end forall
+      
+    end subroutine reduction_operator
+    
+
+    subroutine reduction_operator_cplx(D2,BL,BR,P,PM1,LBD,CL,CC,FL,FR,N)
+    use m_numerics
+    implicit none
+    !... args in
+    integer :: n
+    real(kind=8),intent(in) :: d2(1:n+1,1:n+1)
+    real(kind=8),intent(in) :: bl(1:n+1,1:n+1)
+    real(kind=8),intent(in) :: br(1:n+1,1:n+1)
+    !... args out
+    real(kind=8),intent(out) :: P(1:N+1,1:N+1),PM1(1:N+1,1:N+1)
+    complex(kind=8),intent(out) :: LBD(1:N+1)
+    real(kind=8),intent(out) :: FL(1:N+1),FR(1:N+1)
+    real(kind=8),intent(out) :: CL(1:2,1:2),CC(1:2,1:N+1)
+    !... variables
+    real(kind=8) :: D2_(2:N,2:N)
+    real(kind=8) :: P_(2:N,2:N),PM1_(2:N,2:N)
+    complex(kind=8) :: LBD_(2:N)
+    
+    integer :: i,j
+    
+    ! inverse of cl attention au det
+    ! CL(1,1:2) = BL(0,0) , BL(0,N)
+    ! CL(2,1:2) = BR(N,0) , BR(N,N)
+      
+    cl(1,1:2) = [   br(n+1,n+1) , - bl(1,n+1) ]
+    cl(2,1:2) = [ - br(n+1,  1) ,   bl(1,  1) ] 
+    cl = cl / ( bl(1,1)*br(n+1,n+1) - br(n+1,1)*bl(1,n+1)  )
+    
+    forall(i=2:n,j=2:n)
+       d2_(i,j) = d2(i,j) &
+            - d2(i,1  )*( cl(1,1)*bl(1,j) + cl(1,2)*br(n+1,j)  ) &
+            - d2(i,n+1)*( cl(2,1)*bl(1,j) + cl(2,2)*br(n+1,j)  ) 
+    end forall
+    
+    call diagonalise_cplx( d2_(2:n,2:n), p_(2:n,2:n), pm1_(2:n,2:n), lbd_(2:n), n-1 )
+    
+    
+      p=0
+      pm1=0
+      !> 
+      forall(i=1:n+1) p(i,i) = 1d0
+      forall(i=1:n+1) pm1(i,i) = 1d0
+      
+      forall(i=2:n,j=2:n)
+         p(i,j) = p_(i,j)
+         pm1(i,j) = pm1_(i,j)
+      end forall
+      
+      CC(1,  1) = 1
+      CC(1,2:n) = -bl(1,2:n)
+      CC(1,n+1) = 0
+      
+      CC(2,  1) = 0
+      CC(2,2:n) = -br(n+1,2:n)
+      CC(2,n+1) = 1
+      
+      
+      forall(i=1:n+1) lbd(i) = 1e16 
+      forall(i=2:n  ) lbd(i) = lbd_(i)
+      
+      forall(i=2:n)
+         fl(i) = d2(i,1)*cl(1,1) + d2(i,n+1)*cl(2,1)
+         fr(i) = d2(i,1)*cl(1,2) + d2(i,n+1)*cl(2,2)
+      end forall
+      
+    end subroutine reduction_operator_cplx
+
+
+    
+    subroutine solver_diag_hhi_build(this,&
+         x, nux, nx, xst, xen, &
+         y, nuy, ny, yst, yen, &
+         z, nuz, nz, zst, zen, d2z, dz, cl_left_z, cl_right_z )
+      use decomp_2d_mpi
+      implicit none
+      class(t_solver_diag_cyl_hhi) :: this
+      integer :: nx,xst(3),xen(3)
+      REAL(KIND=8) :: x(nx+1),nux
+      
+      integer :: ny,yst(3),yen(3)
+      REAL(KIND=8) :: y(ny+1),nuy
+      
+      integer :: nz,zst(3),zen(3)
+      REAL(KIND=8) :: z(nz+1),nuz,d2z(1:nz+1,1:nz+1),dz(1:nz+1,1:nz+1)
+      REAL(KIND=8) :: cl_left_z(2), cl_right_z(2)
+      
+      real(kind=8) :: pi=acos(-1.)
+      real(kind=8) :: xmin,xmax,hx,lx,wx
+    real(kind=8) :: ymin,ymax,hy,ly,wy
+
+    integer :: nxp,nyp,nzp
+    
+    integer :: i,im,jm,j,k
+
+    real(kind=8),allocatable :: d2(:,:),r(:,:),rm1(:,:),rm2(:,:),bl(:,:),br(:,:),id(:,:)
+    
+    REAL(KIND=8), dimension(:,:,:), allocatable :: PZ,PZM1
+    REAL(KIND=8), dimension(:,:)  , allocatable :: LBDZ
+    COMPLEX(KIND=8), dimension(:,:)  , allocatable :: LBDZ_
+    REAL(KIND=8), dimension(:,:)  , allocatable :: FLZ,FRZ
+    REAL(KIND=8), dimension(:,:)  , allocatable :: CCZ
+    REAL(KIND=8) :: clz(2,2)
+
+    
+
+    this%n(1) = nx ; this%xst = xst ; this%xen = xen ;
+    this%n(2) = ny ; this%yst = yst ; this%yen = yen ;
+    this%n(3) = nz ; this%zst = zst ; this%zen = zen ;
+
+    ! wavenumber in the direction-z := \varphi
+    nxp = nx+1
+    hx = x(2)-x(1)
+    xmin = x(1)
+    xmax = x(nx+1)+hx
+    Lx = xmax-xmin 
+    wx = (2*pi)/Lx
+
+    nyp = ny+1
+    hy = y(2)-y(1)
+    ymin = y(1)
+    ymax = y(ny+1)+hy
+    Ly = ymax-ymin 
+    wy = (2*pi)/Ly
+    
+    nzp = nz + 1
+    
+    allocate( r(1:nz+1,1:nz+1) , rm1(1:nz+1,1:nz+1) , rm2(1:nz+1,1:nz+1) )
+    r = 0
+    rm1 = 0
+    rm2 = 0
+    do i = 1 , nz+1
+       r  (i,i) = z(i)
+       rm1(i,i) = z(i)**(-1)
+       rm2(i,i) = z(i)**(-2)
+    end do
+
+    
+    allocate( pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pz = 0
+    allocate( pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pzm1 = 0
+    allocate( lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz = 0 
+    allocate( lbdz_( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz_ = 0 
+    
+    allocate( flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; flz = 0
+    allocate( frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; frz = 0
+    allocate( ccz ( 1:2    , 1:nz+1                 ) ) ; ccz = 0
+
+    
+    allocate( id ( 1:nz+1 , 1:nz+1 ) ) ; id = 0
+    allocate( d2 ( 1:nz+1 , 1:nz+1 ) ) ; d2 = 0
+    allocate( bl ( 1:nz+1 , 1:nz+1 ) ) ; bl = 0
+    allocate( br ( 1:nz+1 , 1:nz+1 ) ) ; br = 0
+    
+    
+    id=0
+    do i=1,nz+1
+       id(i,i)=1
+    end do
+    d2 = 0
+
+    this%nu=[nux,nuy,nuz]
+
+    bl = cl_left_z(1) * id + cl_left_z(2) * dz
+    br = cl_right_z(1) * id + cl_right_z(2) * dz
+
+    
+    do i = zst(1) , zen(1)
+       
+       im = half_complex_wp(i,nx+1)
+       d2 = nuz*( d2z +  matmul( rm1 , dz ) ) - nux * (im*wx)**2 * rm2
+
+       ! composantes :  ( 1 # azimuth , 2 # axial , 3 # radial )
+       if ( (this%axis==1).or.(this%axis==3) ) then
+          d2 = d2  -  nuz*rm2
+       end if
+!!$       if ((this%axis==3).or.(this%axis==1)) then
+
+!!$       end if
+       
+       !d2 = nuz*( matmul(rm1,matmul( dz,  matmul( r , dz ))) ) - nux * (im*wx)**2 * rm2
+!!$       call reduction_operator( &
+!!$            d2, bl, br, pz(1:nzp,1:nzp,i), pzm1(1:nzp,1:nzp,i), lbdz(1:nzp,i), & 
+!!$            clz, ccz, flz(1:nzp,1),frz(1:nzp,1), nz )
+       call reduction_operator_cplx( &
+            d2, bl, br, pz(1:nzp,1:nzp,i), pzm1(1:nzp,1:nzp,i), lbdz_(1:nzp,i), & 
+            clz, ccz, flz(1:nzp,1),frz(1:nzp,1), nz )
+
+       
+    end do
+
+    allocate( this%pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pz = pz
+    allocate( this%pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pzm1 = pzm1
+    !allocate( this%lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; this%lbdz = lbdz 
+    allocate( this%lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; this%lbdz = lbdz_ 
+    
+    allocate( this%flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%flz = flz
+    allocate( this%frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%frz = frz
+    allocate( this%ccz ( 1:2    , 1:nz+1                 ) ) ; this%ccz = ccz
+    
+    this%clz = clz
+    
+    deallocate( d2,bl,br,id )
+
+    allocate( this%lbdy( 1:ny+1 ) ); this%lbdy = 0
+    do j = 1 , ny+1
+       jm = half_complex_wp(j,ny+1)
+       this%lbdy(j) = - nuy*(jm*wy)**2
+    end do
+
+    allocate( this%lbdx( 1:nx+1 ) ); this%lbdx = 0
+    do i = 1 , nx+1
+       im = half_complex_wp(i,nx+1)
+       this%lbdx(i) = - nux*(im*wx)**2
+    end do
+    
+    allocate( this%bc_val_l_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_l_z = 0
+    allocate( this%bc_val_r_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_r_z = 0
+
+
+    if (.not.allocated(dg_cl_z)) then
+       allocate( dg_cl_z(zst(1):zen(1),zst(2):zen(2),1:2 )  )
+       allocate( LBD(zst(1):zen(1),zst(2):zen(2),zst(3):zen(3) ) )
+    end if
+    
+    
+
+    
+  end subroutine solver_diag_hhi_build
+  
+
+  subroutine solver_diag_hhi_build_stress_free(this,&
+         x, nux, nx, xst, xen, &
+         y, nuy, ny, yst, yen, &
+         z, nuz, nz, zst, zen, d2z, dz, cl_left_z, cl_right_z,&
+         axe)
+      use decomp_2d_mpi
+      implicit none
+      class(t_solver_diag_cyl_hhi) :: this
+      integer :: nx,xst(3),xen(3)
+      REAL(KIND=8) :: x(nx+1),nux
+      
+      integer :: ny,yst(3),yen(3)
+      REAL(KIND=8) :: y(ny+1),nuy
+      
+      integer :: nz,zst(3),zen(3)
+      REAL(KIND=8) :: z(nz+1),nuz,d2z(1:nz+1,1:nz+1),dz(1:nz+1,1:nz+1)
+      REAL(KIND=8) :: cl_left_z(2), cl_right_z(2)
+      
+      real(kind=8) :: pi=acos(-1.)
+      real(kind=8) :: xmin,xmax,hx,lx,wx
+    real(kind=8) :: ymin,ymax,hy,ly,wy
+
+    integer :: nxp,nyp,nzp,axe
+    
+    integer :: i,im,jm,j,k
+
+    real(kind=8),allocatable :: d2(:,:),r(:,:),rm1(:,:),rm2(:,:),bl(:,:),br(:,:),id(:,:)
+    
+    REAL(KIND=8), dimension(:,:,:), allocatable :: PZ,PZM1
+    REAL(KIND=8), dimension(:,:)  , allocatable :: LBDZ
+    COMPLEX(KIND=8), dimension(:,:)  , allocatable :: LBDZ_
+    REAL(KIND=8), dimension(:,:)  , allocatable :: FLZ,FRZ
+    REAL(KIND=8), dimension(:,:)  , allocatable :: CCZ
+    REAL(KIND=8) :: clz(2,2)
+
+    
+
+    this%n(1) = nx ; this%xst = xst ; this%xen = xen ;
+    this%n(2) = ny ; this%yst = yst ; this%yen = yen ;
+    this%n(3) = nz ; this%zst = zst ; this%zen = zen ;
+
+    ! wavenumber in the direction-z := \varphi
+    nxp = nx+1
+    hx = x(2)-x(1)
+    xmin = x(1)
+    xmax = x(nx+1)+hx
+    Lx = xmax-xmin 
+    wx = (2*pi)/Lx
+
+    nyp = ny+1
+    hy = y(2)-y(1)
+    ymin = y(1)
+    ymax = y(ny+1)+hy
+    Ly = ymax-ymin 
+    wy = (2*pi)/Ly
+    
+    nzp = nz + 1
+    
+    allocate( r(1:nz+1,1:nz+1) , rm1(1:nz+1,1:nz+1) , rm2(1:nz+1,1:nz+1) )
+    r = 0
+    rm1 = 0
+    rm2 = 0
+    do i = 1 , nz+1
+       r  (i,i) = z(i)
+       rm1(i,i) = z(i)**(-1)
+       rm2(i,i) = z(i)**(-2)
+    end do
+
+    
+    allocate( pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pz = 0
+    allocate( pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pzm1 = 0
+    allocate( lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz = 0 
+    allocate( lbdz_( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz_ = 0 
+    
+    allocate( flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; flz = 0
+    allocate( frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; frz = 0
+    allocate( ccz ( 1:2    , 1:nz+1                 ) ) ; ccz = 0
+
+    
+
+    allocate( id ( 1:nz+1 , 1:nz+1 ) ) ; id = 0
+    !allocate( da ( 1:nz+1 , 1:nz+1 ) ) ; da = 0
+    !allocate( dr ( 1:nz+1 , 1:nz+1 ) ) ; dr = 0
+    allocate( d2 ( 1:nz+1 , 1:nz+1 ) ) ; d2 = 0
+    allocate( bl ( 1:nz+1 , 1:nz+1 ) ) ; bl = 0
+    allocate( br ( 1:nz+1 , 1:nz+1 ) ) ; br = 0
+    
+    
+    id=0
+    do i=1,nz+1
+       id(i,i)=1
+    end do
+    d2 = 0
+
+    this%nu=[nux,nuy,nuz]
+
+!    SELECT CASE (COMP)
+    
+!    case(1) !composante A : dr ua - ua/r = 0
+!       bl = - 1._DP/r_min * id + dr
+!       br = - 1._DP/r_max * id + dr
+
+    
+!    case(2) !composante Z : dr uz = 0
+!       bl = dz
+!       br = dz
+       
+!    case(3) !composante R : 1/r * d_a ur = 0 
+!       bl = 1._DP/r_min * da
+!       br = 1._DP/r_max * da
+       
+!    end SELECT
+       
+    do i = zst(1) , zen(1)
+       
+       im = half_complex_wp(i,nx+1)
+       d2 = nuz*( d2z +  matmul( rm1 , dz ) ) - nux * (im*wx)**2 * rm2
+
+       ! composantes :  ( 1 # azimuth , 2 # axial , 3 # radial )
+       if ( (this%axis==1).or.(this%axis==3) ) then
+          d2 = d2  -  nuz*rm2
+       end if
+!!$       if ((this%axis==3).or.(this%axis==1)) then
+
+!!$       end if
+       
+       !d2 = nuz*( matmul(rm1,matmul( dz,  matmul( r , dz ))) ) - nux * (im*wx)**2 * rm2
+!!$       call reduction_operator( &
+!!$            d2, bl, br, pz(1:nzp,1:nzp,i), pzm1(1:nzp,1:nzp,i), lbdz(1:nzp,i), & 
+!!$            clz, ccz, flz(1:nzp,1),frz(1:nzp,1), nz )
+       call reduction_operator_cplx( &
+            d2, bl, br, pz(1:nzp,1:nzp,i), pzm1(1:nzp,1:nzp,i), lbdz_(1:nzp,i), & 
+            clz, ccz, flz(1:nzp,1),frz(1:nzp,1), nz )
+
+       
+    end do
+
+    allocate( this%pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pz = pz
+    allocate( this%pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pzm1 = pzm1
+    !allocate( this%lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; this%lbdz = lbdz 
+    allocate( this%lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; this%lbdz = lbdz_ 
+    
+    allocate( this%flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%flz = flz
+    allocate( this%frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%frz = frz
+    allocate( this%ccz ( 1:2    , 1:nz+1                 ) ) ; this%ccz = ccz
+    
+    this%clz = clz
+    
+    deallocate( d2,bl,br,id )
+
+    allocate( this%lbdy( 1:ny+1 ) ); this%lbdy = 0
+    do j = 1 , ny+1
+       jm = half_complex_wp(j,ny+1)
+       this%lbdy(j) = - nuy*(jm*wy)**2
+    end do
+
+    allocate( this%lbdx( 1:nx+1 ) ); this%lbdx = 0
+    do i = 1 , nx+1
+       im = half_complex_wp(i,nx+1)
+       this%lbdx(i) = - nux*(im*wx)**2
+    end do
+    
+    allocate( this%bc_val_l_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_l_z = 0
+    allocate( this%bc_val_r_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_r_z = 0
+
+
+    if (.not.allocated(dg_cl_z)) then
+       allocate( dg_cl_z(zst(1):zen(1),zst(2):zen(2),1:2 )  )
+       allocate( LBD(zst(1):zen(1),zst(2):zen(2),zst(3):zen(3) ) )
+    end if
+    
+    
+
+    
+  end subroutine solver_diag_hhi_build_stress_free
+
+
+
+  subroutine solver_diag_hhi_build_svv(this,&
+       x, nux, nx, xst, xen, &
+       y, nuy, ny, yst, yen, &
+         z, nuz, nz, zst, zen, d2z, dz, cl_left_z, cl_right_z,alpha,beta )
+    use decomp_2d_mpi
+    implicit none
+    class(t_solver_diag_cyl_hhi) :: this
+    integer :: nx,xst(3),xen(3)
+    REAL(KIND=8) :: x(nx+1),nux
+      
+    integer :: ny,yst(3),yen(3)
+    REAL(KIND=8) :: y(ny+1),nuy
+      
+    integer :: nz,zst(3),zen(3)
+    REAL(KIND=8) :: z(nz+1),nuz,d2z(1:nz+1,1:nz+1),dz(1:nz+1,1:nz+1)
+    REAL(KIND=8) :: cl_left_z(2), cl_right_z(2)
+      
+    real(kind=8) :: pi=acos(-1.),alpha,beta
+    real(kind=8) :: xmin,xmax,hx,lx,wx
+    real(kind=8) :: ymin,ymax,hy,ly,wy
+      
+    integer :: nxp,nyp,nzp
+      
+    integer :: i,im,jm,j,k
+
+    real(kind=8),allocatable :: d2(:,:),r(:,:),rm1(:,:),rm2(:,:),bl(:,:),br(:,:),id(:,:)
+    
+    REAL(KIND=8), dimension(:,:,:), allocatable :: PZ,PZM1
+    REAL(KIND=8), dimension(:,:)  , allocatable :: LBDZ
+    COMPLEX(KIND=8), dimension(:,:)  , allocatable :: LBDZ_
+    REAL(KIND=8), dimension(:,:)  , allocatable :: FLZ,FRZ
+    REAL(KIND=8), dimension(:,:)  , allocatable :: CCZ,SVV_TCHEBY,M,T,Q
+    REAL(KIND=8), dimension(:), allocatable :: C
+    REAL(KIND=8) :: clz(2,2),cut,epsilon,svv
+
+    
+      
+    this%n(1) = nx ; this%xst = xst ; this%xen = xen ;
+    this%n(2) = ny ; this%yst = yst ; this%yen = yen ;
+    this%n(3) = nz ; this%zst = zst ; this%zen = zen ;
+
+    ! wavenumber in the direction-z := \varphi
+    nxp = nx+1
+    hx = x(2)-x(1)
+    xmin = x(1)
+    xmax = x(nx+1)+hx
+    Lx = xmax-xmin 
+    wx = (2*pi)/Lx
+      
+    nyp = ny+1
+    hy = y(2)-y(1)
+    ymin = y(1)
+    ymax = y(ny+1)+hy
+    Ly = ymax-ymin 
+    wy = (2*pi)/Ly
+    
+    nzp = nz + 1
+    
+    allocate( r(1:nz+1,1:nz+1) , rm1(1:nz+1,1:nz+1) , rm2(1:nz+1,1:nz+1) )
+    r = 0
+    rm1 = 0
+    rm2 = 0
+    do i = 1 , nz+1
+       r  (i,i) = z(i)
+       rm1(i,i) = z(i)**(-1)
+       rm2(i,i) = z(i)**(-2)
+    end do
+    
+    
+    allocate( pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pz = 0
+    allocate( pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; pzm1 = 0
+    allocate( lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz = 0 
+    allocate( lbdz_( 1:nz+1 ,          zst(1):zen(1) ) ) ; lbdz_ = 0 
+      
+    allocate( flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; flz = 0
+    allocate( frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; frz = 0
+    allocate( ccz ( 1:2    , 1:nz+1                 ) ) ; ccz = 0
+
+    
+    allocate( id ( 1:nz+1 , 1:nz+1 ) ) ; id = 0
+    allocate( d2 ( 1:nz+1 , 1:nz+1 ) ) ; d2 = 0
+    allocate( bl ( 1:nz+1 , 1:nz+1 ) ) ; bl = 0
+    allocate( br ( 1:nz+1 , 1:nz+1 ) ) ; br = 0
+    
+    
+    id=0
+    do i=1,nz+1
+       id(i,i)=1
+    end do
+    d2 = 0
+
+    this%nu=[nux,nuy,nuz]
+    
+    
+    bl = cl_left_z(1) * id + cl_left_z(2) * dz
+    br = cl_right_z(1) * id + cl_right_z(2) * dz
+
+    !ajout de la svv à l'opératuer d2
+    
+!    allocate(M(1:nz+1,1:nz+1),T(1:nz+1,1:nz+1),Q(1:nz+1,1:nz+1),C(1:nz+1),SVV_TCHEBY(1:nz+1,1:nz+1))
+!    C=1.
+!    C(1)=2.
+!    C(nz+1)=2.
+    
+!    do i=1,nz+1
+!       do j=1,nz+1
+!          M(I,J) = 2./REAL(nz) * cos(i*j*pi/nz) * 1/(c(i)*c(j))
+!          T(I,J) =              cos(i*j*pi/nz)
+!       end do
+!    end do
+      
+!    cut = beta*SQRT(REAL(nz))
+!    epsilon = alpha/REAL(nz)
+!    Q=0.
+!    DO k=1,nz
+!       IF (k > cut) Q(k,k) =  EXP( - REAL(k-nz)**2/REAL(k-cut)**2 )
+!    END DO
+
+!    SVV_TCHEBY = MATMUL( T , epsilon * MATMUL(Q , M ) )
+
+    epsilon = 2.*alpha/real(nx+1)
+    cut = beta*sqrt(real(nx+1)/2.)
+    
+    do i = zst(1) , zen(1)
+       k = abs(index_to_freq_c2c(i,nx+1))
+       if ( k < cut ) then
+          svv = 0.
+       else
+          svv = epsilon*exp(- (k - nx - 1.0 )**2/((k - cut)**2) )
+       end if
+       !write(6,'(2(i9),9(e15.8))')i,k,svv
+       im = half_complex_wp(i,nx+1)
+       d2 = nuz*( d2z +  matmul( rm1 , dz ) ) - (nux + svv) * (im*wx)**2 * rm2
+       
+       ! composantes :  ( 1 # azimuth , 2 # axial , 3 # radial )
+       if ( (this%axis==1).or.(this%axis==3) ) then
+          d2 = d2  -  nuz*rm2 !+ SVV_TCHEBY
+       end if
+       
+       call reduction_operator_cplx( &
+            d2, bl, br, pz(1:nzp,1:nzp,i), pzm1(1:nzp,1:nzp,i), lbdz_(1:nzp,i), & 
+            clz, ccz, flz(1:nzp,1),frz(1:nzp,1), nz )
+       
+       
+    end do
+    
+    allocate( this%pz  ( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pz = pz
+    allocate( this%pzm1( 1:nz+1 , 1:nz+1 , zst(1):zen(1) ) ) ; this%pzm1 = pzm1
+    allocate( this%lbdz( 1:nz+1 ,          zst(1):zen(1) ) ) ; this%lbdz = lbdz_ 
+    
+    allocate( this%flz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%flz = flz
+    allocate( this%frz ( 1:nz+1 ,          xst(1):xen(1) ) ) ; this%frz = frz
+    allocate( this%ccz ( 1:2    , 1:nz+1                 ) ) ; this%ccz = ccz
+      
+    this%clz = clz
+    
+    deallocate( d2,bl,br,id )
+    
+    allocate( this%lbdy( 1:ny+1 ) ); this%lbdy = 0
+
+    epsilon = 2.*alpha/real(ny+1)
+    cut = beta*sqrt(real(ny+1)/2.)
+      
+    do j = 1 , ny+1
+       k = abs(index_to_freq_c2c(j, ny+1))
+       if ( k < cut ) then
+          svv = 0.
+       else
+          svv = epsilon*exp(- real((k - ny - 1 )**2)/real((k - cut)**2) )
+       end if
+       jm = half_complex_wp(j,ny+1)
+       this%lbdy(j) = - (nuy + svv) * (jm*wy)**2
+    end do
+    
+    allocate( this%lbdx( 1:nx+1 ) ); this%lbdx = 0
+    allocate( this%bc_val_l_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_l_z = 0
+    allocate( this%bc_val_r_z ( xst(1):xen(1) , xst(2):xen(2) ) ) ; this%bc_val_r_z = 0
+
+
+    if (.not.allocated(dg_cl_z)) then
+       allocate( dg_cl_z(zst(1):zen(1),zst(2):zen(2),1:2 )  )
+       allocate( LBD(zst(1):zen(1),zst(2):zen(2),zst(3):zen(3) ) )
+    end if
+    
+  end subroutine solver_diag_hhi_build_svv
+
+
+  
+  subroutine solver_diag_hhi_set_boundary_field(x,y,z,udf_bc_left,udf_bc_right,bvzl,bvzr,xst,xen,yst,yen,zst,zen)
+    use m_numerics
+    implicit none
+    integer :: xst(3),xen(3)
+    integer :: yst(3),yen(3)
+    integer :: zst(3),zen(3)
+    
+    real(kind=8), dimension(:),allocatable :: x,y,z
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzl
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzr
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_LEFT
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_RIGHT
+    integer :: i,j
+    integer :: nx,ny,nz,n(3)
+    real(kind=8) :: zmin,zmax
+
+    n = xen - xst
+    nz = zen(3) - zst(3) + 1 - 1
+
+    zmin = z(1)
+    zmax = z(nz+1)
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2))
+       bvzl(i,j) = udf_bc_left(0d0,X(I),Y(J),ZMIN)
+    end forall
+    
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2))
+       bvzr(i,j) = udf_bc_right(0d0,X(I),Y(J),ZMAX)
+    end forall
+
+    
+    
+  end subroutine solver_diag_hhi_set_boundary_field
+
+
+  subroutine solver_diag_hhi_set_unsteady_boundary_field(x,y,z,tc,udf_bc_left,udf_bc_right,bvzl,bvzr,xst,xen,yst,yen,zst,zen)
+    use m_numerics
+    implicit none
+    integer :: xst(3),xen(3)
+    integer :: yst(3),yen(3)
+    integer :: zst(3),zen(3)
+    real(kind=8) :: tc
+    real(kind=8), dimension(:),allocatable :: x,y,z
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzl
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzr
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_LEFT
+    PROCEDURE(UDF_TIMESPACE)      :: UDF_BC_RIGHT
+    integer :: i,j
+    integer :: nx,ny,nz,n(3)
+    real(kind=8) :: zmin,zmax
+
+    n = xen - xst
+    nz = zen(3) - zst(3) + 1
+    
+    zmin = z(1)
+    zmax = z(nz+1)
+
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2))
+       bvzl(i,j) = udf_bc_left(tc,X(I),Y(J),ZMIN)
+    end forall
+
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2))
+       bvzr(i,j) = udf_bc_right(tc,X(I),Y(J),ZMAX)
+    end forall
+    
+    
+  end subroutine solver_diag_hhi_set_unsteady_boundary_field
+  
+  subroutine solver_diag_cyl_hhi_solve(fi,sfi,sigma,&
+       lbdx, nx, xst, xen, &
+       lbdy, ny, yst, yen, &
+       lbdz, nz, zst, zen, pz, pzm1, clz,ccz, fzl, fzr, bvzl, bvzr)
+    use m_fourier_transform
+    use decomp_2d
+    implicit none
+    real(kind=8) :: sigma
+    integer :: nx,xst(3),xen(3)
+    integer :: ny,yst(3),yen(3)
+    integer :: nz,zst(3),zen(3)
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2),xst(3):xen(3) ) :: fi,sfi
+    complex(kind=8), dimension( 1:nx+1 ) :: lbdx 
+    complex(kind=8), dimension( 1:ny+1 ) :: lbdy
+    complex(kind=8), dimension( 1:nz+1 , zst(1):zen(1) ) :: lbdz
+    
+    complex(kind=8), dimension( 1:nz+1,1:nz+1, zst(1):zen(1)  ) :: pz,pzm1
+
+    complex(kind=8), dimension(1:nz+1,1:2) :: ccz
+    real(kind=8)::clz(2,2)
+    real(kind=8), dimension(1:nz+1) :: fzl,fzr
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzl
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzr
+    integer :: i,j,k
+        
+    forall(i=xst(1):xen(1),j=xst(2):xen(2),k=xst(3):xen(3))
+       dg_x(i,j,k) = sfi(i,j,k) - (fzl(k)*bvzl(i,j) + fzr(k)*bvzr(i,j))
+    end forall
+    
+    DO K = ZST(3),ZEN(3)
+       DO J = ZST(2),ZEN(2) 
+          DO I=ZST(1),ZEN(1)
+             LBD(I,J,K) = ( lbdz(k,i) +  lbdy(j) + sigma )**(-1)
+             IF (K==   1) LBD(I,J,K) = 1
+             IF (K==NZ+1) LBD(I,J,K) = 1
+          END DO
+       END DO
+    END DO
+    
+    if (xst(3)==1) then
+       forall(i=xst(1):xen(1),j=xst(2):xen(2))
+          dg_x(i,j,   1) = bvzl(i,j)
+       end forall
+    end if
+
+    
+    if (xen(3)==nz+1) then
+       forall(i=xst(1):xen(1),j=xst(2):xen(2))
+          dg_x(i,j,nz+1) = bvzr(i,j)
+       end forall
+    end if
+
+    
+    call c2c_1m_x(dg_x,plan_fwd_x)
+    call transpose_x_to_y(dg_x, zg1_y)
+    call c2c_1m_y(zg1_y,plan_fwd_y)
+    call transpose_y_to_z(zg1_y,zg1_z)
+
+    !call tensor_product_k(pzm1,zg1_z,zg2_z,zst,zen)
+    CALL TENSOR_PRODUCT_KK(pzm1, zg1_z, zg2_z, ZST, ZEN)
+
+    
+    forall(i=zst(1):zen(1),j=zst(2):zen(2),k=zst(3):zen(3))
+       zg1_z(i,j,k) = zg2_z(i,j,k) * LBD(i,j,k)
+    end forall
+    
+    
+    !call tensor_product_k(pz,zg1_z,zg2_z,zst,zen)
+    CALL TENSOR_PRODUCT_KK(pz, zg1_z, zg2_z, ZST, ZEN)
+    call tensor_product_k_cl(ccz, zg2_z, dg_cl_z, zst, zen , nz )
+
+    forall(i=zst(1):zen(1),j=zst(2):zen(2))
+       zg2_z(i,j,   1) = dg_cl_z(i,j,1)*clz(1,1) + dg_cl_z(i,j,2)*clz(1,2)
+       zg2_z(i,j,nz+1) = dg_cl_z(i,j,1)*clz(2,1) + dg_cl_z(i,j,2)*clz(2,2)
+    end forall
+
+    
+    call transpose_z_to_y(zg2_z,zg1_y)
+    call c2c_1m_y(zg1_y,plan_bck_y)
+    call transpose_y_to_x(zg1_y,dg_x)
+    call c2c_1m_x(dg_x,plan_bck_x)
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2),k=xst(3):xen(3))
+       fi(i,j,k) = dg_x(i,j,k)
+    end forall
+  end subroutine solver_diag_cyl_hhi_solve
+
+
+
+
+  subroutine solver_diag_cyl_hhi_solve_poisson(fi,sfi,&
+       nux,lbdx, nx, xst, xen, &
+       nuy,lbdy, ny, yst, yen, &
+       nuz,lbdz, nz, zst, zen, pz, pzm1, clz,ccz, fzl, fzr, bvzl, bvzr)
+    use m_fourier_transform
+    use decomp_2d
+    implicit none
+    real(kind=8) :: nux,nuy,nuz
+    integer :: nx,xst(3),xen(3)
+    integer :: ny,yst(3),yen(3)
+    integer :: nz,zst(3),zen(3)
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2),xst(3):xen(3) ) :: fi,sfi
+    complex(kind=8), dimension( 1:nx+1 ) :: lbdx 
+    complex(kind=8), dimension( 1:ny+1 ) :: lbdy
+    complex(kind=8), dimension( 1:nz+1 ) :: lbdz
+    
+    complex(kind=8), dimension( 1:nz+1,1:nz+1 ) :: pz,pzm1
+
+    complex(kind=8), dimension(1:nz+1,1:2) :: ccz
+    real(kind=8)::clz(2,2)
+    real(kind=8), dimension(1:nz+1) :: fzl,fzr
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzl
+    real(kind=8), dimension(xst(1):xen(1),xst(2):xen(2)) :: bvzr
+    integer :: i,j,k,ierr
+
+    
+!!$    forall(i=xst(1):xen(1),j=xst(2):xen(2),k=xst(3):xen(3))
+!!$       dg_x(i,j,k) = sfi(i,j,k)  - (fzl(k)*bvzl(i,j) + fzr(k)*bvzr(i,j))
+!!$    end forall
+
+    
+
+    print*,"solver_diag_cyl_hhi_solve_poisson"
+    call mpi_finalize(ierr)
+    stop
+    dg_x = sfi 
+    
+    DO K = ZST(3),ZEN(3)
+       DO J = ZST(2),ZEN(2) 
+          DO I=ZST(1),ZEN(1)
+             LBD(I,J,K) = ( nux*lbdx(i) + nuy*lbdy(j) +  nuz*lbdz(k)  )**(-1)
+
+             IF (K==   1) LBD(I,J,K) = 1
+             IF (K==NZ+1) LBD(I,J,K) = 1
+          END DO
+       END DO
+    END DO
+    
+    if (xst(3)==1) then
+       forall(i=xst(1):xen(1),j=xst(2):xen(2))
+          dg_x(i,j,   1) = bvzl(i,j)
+       end forall
+    end if
+
+    
+    if (xen(3)==nz+1) then
+       forall(i=xst(1):xen(1),j=xst(2):xen(2))
+          dg_x(i,j,nz+1) = bvzr(i,j)
+       end forall
+    end if
+
+    
+    call c2c_1m_x(dg_x,plan_fwd_x)
+    call transpose_x_to_y(dg_x, zg1_y)
+    call c2c_1m_y(zg1_y,plan_fwd_y)
+    call transpose_y_to_z(zg1_y,zg1_z)
+    call tensor_product_k(pzm1,zg1_z,zg2_z,zst,zen)
+
+    
+    forall(i=zst(1):zen(1),j=zst(2):zen(2),k=zst(3):zen(3))
+       zg1_z(i,j,k) = zg2_z(i,j,k) * LBD(i,j,k)
+    end forall
+    
+    
+    call tensor_product_k(pz,zg1_z,zg2_z,zst,zen)
+    call tensor_product_k_cl(ccz, zg2_z, dg_cl_z, zst, zen , nz )
+
+    forall(i=zst(1):zen(1),j=zst(2):zen(2))
+       zg2_z(i,j,   1) = dg_cl_z(i,j,1)*clz(1,1) + dg_cl_z(i,j,2)*clz(1,2)
+       zg2_z(i,j,nz+1) = dg_cl_z(i,j,1)*clz(2,1) + dg_cl_z(i,j,2)*clz(2,2)
+    end forall
+
+    
+    call transpose_z_to_y(zg2_z,zg1_y)
+    call c2c_1m_y(zg1_y,plan_bck_y)
+    call transpose_y_to_x(zg1_y,dg_x)
+    call c2c_1m_x(dg_x,plan_bck_x)
+    
+    forall(i=xst(1):xen(1),j=xst(2):xen(2),k=xst(3):xen(3))
+       fi(i,j,k) = dg_x(i,j,k)
+    end forall
+  end subroutine solver_diag_cyl_hhi_solve_poisson
+  
+  SUBROUTINE TENSOR_PRODUCT_KK(DZ, FI, DFI, ZST, ZEN)
+    IMPLICIT NONE
+    INTEGER         :: ZST(3), ZEN(3)
+    COMPLEX(KIND=8) :: DZ(ZST(3):ZEN(3), ZST(3):ZEN(3), ZST(1):ZEN(1))
+    COMPLEX(KIND=8) :: FI(ZST(1):ZEN(1), ZST(2):ZEN(2), ZST(3):ZEN(3))
+    COMPLEX(KIND=8) :: DFI(ZST(1):ZEN(1), ZST(2):ZEN(2), ZST(3):ZEN(3))
+    COMPLEX(KIND=8) :: ALPHA, BETA
+    INTEGER :: I, N(3), NI, NJ, NK,info
+
+    
+    
+    ! Paramètres DGEMM
+    ALPHA = 1D0
+    BETA = 0D0
+    
+    ! Dimensions locales
+    N = ZEN - ZST + 1
+    NI = N(1)
+    NJ = N(2)
+    NK = N(3)
+    
+    DO I=ZST(1),ZEN(1)
+       CALL ZGEMM('N','T',NJ,NK,NK, ALPHA, FI(I,ZST(2):ZEN(2),ZST(3):ZEN(3)), NJ , &
+            DZ(ZST(3):ZEN(3),ZST(3):ZEN(3),I) , NK , BETA , DFI(I,ZST(2):ZEN(2),ZST(3):ZEN(3)), NJ )
+    end DO
+    
+  END SUBROUTINE TENSOR_PRODUCT_KK
+  
+
+  SUBROUTINE TENSOR_PRODUCT_K(DZ, FI, DFI, ZST, ZEN)
+    IMPLICIT NONE
+    INTEGER         :: ZST(3), ZEN(3)
+    complex(KIND=8) :: DZ(ZST(3):ZEN(3), ZST(3):ZEN(3), ZST(1):ZEN(1))
+    complex(KIND=8) :: FI(ZST(1):ZEN(1), ZST(2):ZEN(2), ZST(3):ZEN(3))
+    complex(KIND=8) :: DFI(ZST(1):ZEN(1), ZST(2):ZEN(2), ZST(3):ZEN(3))
+    complex(KIND=8) :: ALPHA, BETA
+    INTEGER :: I, N(3), NI, NJ, NK,info
+    
+    ! Paramètres DGEMM
+    ALPHA = 1D0
+    BETA = 0D0
+    
+    ! Dimensions locales
+    N = ZEN - ZST + 1
+    NI = N(1)
+    NJ = N(2)
+    NK = N(3)
+    
+    
+    CALL ZGEMM('N','T',NI*NJ,NK,NK, ALPHA, FI, NI*NJ , DZ, NK , BETA , DFI, NI*NJ )
+    
+  END SUBROUTINE TENSOR_PRODUCT_K
+  
+
+  
+  SUBROUTINE TENSOR_PRODUCT_K_CL(CC,FI,DFI,ZST,ZEN,NZ)
+    IMPLICIT NONE
+    INTEGER :: ZST(3),ZEN(3),NZ
+    complex(kind=8) :: CC(1:2,1:NZ+1)
+    complex(kind=8) ::  FI(ZST(1):ZEN(1),ZST(2):ZEN(2),ZST(3):ZEN(3))
+    complex(kind=8) :: DFI(ZST(1):ZEN(1),ZST(2):ZEN(2),1:2)
+    
+    INTEGER :: N(3),NI,NJ,NK
+    complex(kind=8) ::  ALPHA,BETA
+    
+    ALPHA = 1d0
+    BETA = 0d0
+    N = ZEN - ZST + 1
+    NI = N(1)
+    NJ = N(2)
+    NK = N(3) ! NZ + 1 car Z-pencil
+    CALL ZGEMM('N','T',NI*NJ,2,NK, ALPHA, FI, NI*NJ , CC, 2 , BETA , DFI, NI*NJ )
+    
+  END SUBROUTINE TENSOR_PRODUCT_K_CL
+
+  !indice Fortran --> fréquence k (1-indexé)
+  function index_to_freq_c2c(idx, N) result(k)
+    implicit none
+    integer, intent(in) :: idx, N
+    integer :: k
+    
+    if (idx <= N/2 + 1) then
+       k = idx - 1
+    else
+       k = idx - 1 - N
+    end if
+    
+  end function index_to_freq_c2c
+
+
+  ! Fréquence k --> indice Fortran (1-indexé)
+  function freq_to_index_c2c(k, N) result(idx)
+    implicit none
+    integer, intent(in) :: k, N
+    integer :: idx
+    
+    if (k >= 0) then
+       idx = k + 1
+    else
+       idx = k + N + 1
+    end if
+    
+  end function freq_to_index_c2c
+  
+
+  
+end module m_solver_diag_cyl_hhi

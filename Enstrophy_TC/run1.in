@@ -1,0 +1,32 @@
+&parameters_cube
+na = 128 , 
+nz = 64 ,
+nr = 64 ,
+r_min = 1.0,
+r_max = 3.0,
+z_min = 0.0 ,
+z_max = 1.0 ,  
+nb_cpu_y = 2 ,
+nb_cpu_z = 4
+/
+
+
+&parameters_physical
+RE = 1000 ,
+R_OMEGA = -1.2 ,
+/
+
+
+&parameters_timescheme
+tmax = 20 ,
+dt = 5e-5 ,
+root_dir = 'data_fun/'
+resume = F,
+/
+
+&parameters_diagnostics
+snap_dir = 'snapshots/'
+dn_snap = 100,
+/
+
+

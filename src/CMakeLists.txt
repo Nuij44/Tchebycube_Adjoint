@@ -1,0 +1,54 @@
+
+# all these files provide the core library
+set(SOURCES m_numerics.f90
+m_fourier_transform.f90
+m_tensor_product.f90
+m_solver_diag_cyl_hhi.f90
+m_solver_diag_cart_hhi.f90
+m_solver_diag_cart_hhh.f90
+m_solver_diag_cart_hhi_cplx.f90
+m_solver_diag_cart_hii.f90
+m_solver_diag_cart_iii.f90
+m_solver_diag_cart_iii_cplx.f90
+m_mesh.f90
+m_discr_fourier.f90
+m_discr_fourier_dft.f90
+m_discr_tcheby.f90
+m_discr_tcheby_dct.f90
+m_operator_base.f90
+m_operator_fourier.f90
+m_operator_fourier_dft.f90
+m_operator_tcheby.f90
+m_adjoint_tool.f90
+m_adjoint_tool_cyl.f90
+m_navier_stokes_cart.f90
+m_navier_stokes_cyl.f90
+m_quadrature.f90
+m_hdf5_ifce.f90
+m_snapshots.f90
+ogpf.f90
+m_gnuplot.f90
+)
+
+# we define the library
+#set_source_files_properties(m_solver_diag_cart_fft_cplx.f90 PROPERTIES COMPILE_FLAGS "-O0")
+#set_source_files_properties(m_solver_diag_cart_ttt_cplx.f90 PROPERTIES COMPILE_FLAGS "-O0")
+add_library(Tcheb3 STATIC ${SOURCES})
+
+#
+find_package(HDF5 COMPONENTS Fortran HL REQUIRED)
+find_package(MPI REQUIRED)
+
+target_include_directories(Tcheb3
+  PUBLIC
+  ${DepDir}/2decomp-fft-2.0.4-icc20-mpi/include
+  ${DepDir}/fftw-3.3.10-icc20-mpi/include
+  ${HDF5_INCLUDE_DIRS}
+  ${MPI_Fortran_INCLUDE_PATH}
+)
+
+
+
+target_link_libraries(Tcheb3 PUBLIC ${HDF5_Fortran_LIBRARIES} ${HDF5_HL_Fortran_LIBRARIES} ${MPI_Fortran_LIBRARIES})
+target_include_directories(Tcheb3 INTERFACE ${CMAKE_Fortran_MODULE_DIRECTORY})
+

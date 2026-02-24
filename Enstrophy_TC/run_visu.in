@@ -1,0 +1,37 @@
+&parameters_cube
+na = 64 , 
+nz = 128 ,
+nr = 64 ,
+r_min = 1.0,
+r_max = 3.0,
+z_min = 0.0 ,
+z_max = 4.0 ,  
+nb_cpu_y = 8 ,
+nb_cpu_z = 4
+/
+
+
+&parameters_physical
+RE = 1000 ,
+/
+
+&parameters_initial_condition
+na0 = 2 ,
+nz0 = 2 ,
+nr0 = 2 ,
+/
+
+&parameters_timescheme
+tmax = 250 ,
+dt = 2e-3 ,
+root_dir = 'outdir/'
+resume = F,
+/
+
+&parameters_diagnostics
+snap_dir = 'snapshots/'
+dn_snap = 100,
+init_file = 'optimisation_4Z_RE_1000/run2/cond_init/init_11.h5'
+/
+
+

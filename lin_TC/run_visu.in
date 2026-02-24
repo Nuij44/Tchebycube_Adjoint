@@ -1,0 +1,33 @@
+&parameters_cube
+na = 128 , 
+nz = 32 ,
+nr = 64 ,
+r_min = 1.0,
+r_max = 3.0,
+z_min = 0.0 ,
+z_max = 1.0 ,  
+nb_cpu_y = 8 ,
+nb_cpu_z = 4
+/
+
+
+&parameters_physical
+prm_k = 1. ,
+RE = 10000 ,
+/
+
+
+&parameters_timescheme
+tmax = 1000 ,
+dt = 2e-3 ,
+root_dir = 'outdir/'
+resume = F,
+/
+
+&parameters_diagnostics
+snap_dir = 'snapshots/'
+dn_snap = 100,
+init_file = '../Taylor_Couette/run_en_cours/run3/cond_init/init_13.h5'
+/
+
+

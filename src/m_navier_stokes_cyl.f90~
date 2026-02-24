@@ -1,0 +1,478 @@
+module m_navier_stokes_cyl
+  use m_operator_base
+  use m_mesh_base
+  implicit none
+
+  INTERFACE DIV
+     MODULE PROCEDURE NS_INC_COLOCATED_CYL_DIVERGENCE
+  END INTERFACE DIV
+
+  INTERFACE GRAD
+     MODULE PROCEDURE NS_INC_COLOCATED_CYL_GRADIENT
+  END INTERFACE GRAD
+
+
+  INTERFACE COMPUTE_NON_LINEAR_TERMS
+     MODULE PROCEDURE M_NAVIER_STOKES_CYL_NLINEAR_MOMENTUM_CONV
+     MODULE PROCEDURE M_NAVIER_STOKES_CYL_NLINEAR_SCALAR_CONV
+  END INTERFACE COMPUTE_NON_LINEAR_TERMS
+
+  INTERFACE COMPUTE_NON_LINEAR_SHEAR_TERMS
+     MODULE PROCEDURE M_NAVIER_STOKES_CYL_NLINEAR_SHEAR_CONV
+  END INTERFACE COMPUTE_NON_LINEAR_SHEAR_TERMS
+  
+  INTERFACE COMPUTE_LINEAR_TERMS
+     MODULE PROCEDURE M_NAVIER_STOKES_CYL_LINEAR_MOMENTUM 
+     MODULE PROCEDURE M_NAVIER_STOKES_CYL_LINEAR_SCALAR
+  END INTERFACE COMPUTE_LINEAR_TERMS
+
+  INTERFACE COMPUTE_VORTICITY
+     MODULE PROCEDURE NS_INC_COLOCATED_CYL_VORTICITY
+  END INTERFACE COMPUTE_VORTICITY
+  
+contains
+
+  subroutine lorentz_force(op_r, op_a, op_z, R, Br, Ba, Bz, Fr, Fa, Fz, &
+                         dg1, dg2, dg3, Jr, Ja, Jz)
+    implicit none
+    class(t_operator_base) :: op_r, op_a, op_z
+    real(kind=8), dimension(:,:,:), allocatable :: R
+    real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+    real(kind=8), dimension(:,:,:), allocatable :: Fr, Fa, Fz
+    real(kind=8), dimension(:,:,:), allocatable :: Jr, Ja, Jz
+    real(kind=8), dimension(:,:,:), allocatable :: dg1, dg2, dg3
+
+    ! === J_r = (1/r) dphi(Bz) - dz(Ba)
+    call op_a%D1(Bz, dg1)
+    dg1 = dg1 / R
+    call op_z%D1(Ba, dg2)
+    Jr = dg1 - dg2
+
+    ! === J_phi = dz(Br) - dr(Bz)
+    call op_z%D1(Br, dg1)
+    call op_r%D1(Bz, dg2)
+    Ja = dg1 - dg2
+
+    ! === J_z = (1/r) dr(r * Ba) - (1/r) dphi(Br)
+    dg3 = Ba * R
+    call op_r%D1(dg3, dg1)
+    dg1 = dg1 / R
+    call op_a%D1(Br, dg2)
+    dg2 = dg2 / R
+    Jz = dg1 - dg2
+
+    ! === Force de Lorentz : F = J × B
+    Fr = Ja * Bz - Jz * Ba
+    Fa = Jz * Br - Jr * Bz
+    Fz = Jr * Ba - Ja * Br
+
+end subroutine lorentz_force
+
+  subroutine compute_u_cross_curl_A(op_a, op_z, op_r, R, &
+       ua, uz, ur, Aa, Az, Ar, NLa, NLz, NLr, dg1, dg2, dg3,Ba,Bz,Br)
+    
+    implicit none
+    
+    class(t_operator_base) :: op_r, op_a, op_z
+    real(kind=8), dimension(:,:,:), allocatable :: R
+    real(kind=8), dimension(:,:,:), allocatable :: ur, ua, uz
+    real(kind=8), dimension(:,:,:), allocatable :: Ar, Aa, Az
+    real(kind=8), dimension(:,:,:), allocatable :: NLr, NLa, NLz
+    real(kind=8), dimension(:,:,:), allocatable :: dg1, dg2, dg3
+    
+    real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+    
+    ! Compute Br
+    call op_a%D1(Az, dg1) ; dg1 = dg1 / R
+    call op_z%D1(Aa, dg2)
+    Br = dg1 - dg2
+    
+    ! Compute Ba
+    call op_z%D1(Ar, dg1)
+    call op_r%D1(Az, dg2)
+    Ba = dg1 - dg2
+    
+    ! Compute Bz
+    call op_r%D1(Aa, dg1)
+    dg1 = dg1 + Aa  ! because d/dr (r * A_theta) = A_theta + r * dA_theta/dr
+    call op_a%D1(Ar, dg2) ; dg2 = dg2 / R
+    Bz = (dg1 - dg2) / R
+    
+    ! Now compute u × B
+    NLr = ua * Bz - uz * Ba
+    NLa = uz * Br - ur * Bz
+    NLz = ur * Ba - ua * Br
+    
+    
+end subroutine compute_u_cross_curl_A
+
+  
+
+  subroutine compute_A_dot_grad_B (op_r, op_a, op_z, R, &
+       Ar, Aa, Az, Br, Ba, Bz, NLr, NLa, NLz, &
+       dg1, dg2, dg3)
+    
+    implicit none
+    
+    class(t_operator_base) :: op_r, op_a, op_z
+    real(kind=8), dimension(:,:,:), allocatable :: R
+    real(kind=8), dimension(:,:,:), allocatable :: Ar, Aa, Az
+    real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+    real(kind=8), dimension(:,:,:), allocatable :: NLr, NLa, NLz
+    real(kind=8), dimension(:,:,:), allocatable :: dg1, dg2, dg3
+    
+
+    call op_r%D1(Br, dg1) 
+    call op_a%D1(Br, dg2) ; dg2 = dg2 / R
+    call op_z%D1(Br, dg3) 
+    NLr = Ar * dg1 + Aa * dg2 + Az * dg3 - (Aa * Ba) / R
+    
+    call op_r%D1(Ba, dg1) 
+    call op_a%D1(Ba, dg2) ; dg2 = dg2 / R
+    call op_z%D1(Ba, dg3)
+    NLa = Ar * dg1 + Aa * dg2 + Az * dg3 + (Br * Ba) / R
+    
+    ! ∂r Bz
+    call op_r%D1(Bz, dg1)
+    call op_a%D1(Bz, dg2) ; dg2 = dg2 / R
+    call op_z%D1(Bz, dg3)
+    NLz = Ar * dg1 + Aa * dg2 + Az * dg3
+    
+  end subroutine compute_A_dot_grad_B
+
+  
+
+
+  subroutine curl_cross(op_r, op_a, op_z, R, &
+     Vr, Va, Vz, Br, Ba, Bz, &
+     Curl_r, Curl_a, Curl_z, &
+     dg1, dg2, dg3, ucBr, ucBa, ucBz)
+
+    implicit none
+
+    class(t_operator_base) :: op_r, op_a, op_z
+    real(kind=8), dimension(:,:,:), allocatable :: R
+    real(kind=8), dimension(:,:,:), allocatable :: Vr, Va, Vz
+    real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+    real(kind=8), dimension(:,:,:), allocatable :: Curl_r, Curl_a, Curl_z
+    real(kind=8), dimension(:,:,:), allocatable :: dg1, dg2, dg3
+    real(kind=8), dimension(:,:,:), allocatable :: ucBr, ucBa, ucBz
+
+    ! Étape 1: V × B
+    ucBr = Va * Bz - Vz * Ba
+    ucBa = Vz * Br - Vr * Bz
+    ucBz = Vr * Ba - Va * Br
+
+    ! Étape 2: (∇ × (V × B))_r = (1/r) * dphi(ucBz) - dz(ucBa)
+    call op_a%D1(ucBz, dg1)
+    dg1 = dg1 / R
+    call op_z%D1(ucBa, dg2)
+    Curl_r = dg1 - dg2
+
+    ! Étape 3: (∇ × (V × B))_phi = dz(ucBr) - dr(ucBz)
+    call op_z%D1(ucBr, dg1)
+    call op_r%D1(ucBz, dg2)
+    Curl_a = dg1 - dg2
+
+    ! Étape 4: (∇ × (V × B))_z = (1/r) * d_r(r * ucBa) - (1/r) * dphi(ucBr)
+    ucBa = ucBa * R  ! calcul de r * ucBa
+    call op_r%D1(ucBa, dg1)
+    dg1 = dg1 / R
+    call op_a%D1(ucBr, dg2)
+    dg2 = dg2 / R
+    Curl_z = dg1 - dg2
+
+end subroutine curl_cross
+
+
+subroutine cross(op_r, op_a, op_z, r,&
+     ur, ua, uz, &
+     br, ba, bz, &
+     cross_r, cross_a, cross_z )
+  class(t_operator_base) :: op_r, op_a, op_z
+  real(kind=8), dimension(:,:,:), allocatable :: R
+  real(kind=8), dimension(:,:,:), allocatable :: ur, ua, uz
+  real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+  real(kind=8), dimension(:,:,:), allocatable :: cross_r, cross_a, cross_z
+  cross_r = ua * Bz - uz * Ba
+  cross_a = uz * Br - ur * Bz
+  cross_z = ur * Ba - ua * Br
+end subroutine cross
+
+subroutine curl(op_r, op_a, op_z, R, &
+     Br, Ba, Bz, &
+     Curl_r, Curl_a, Curl_z, &
+     dg1, dg2, dg3)
+
+    implicit none
+
+    class(t_operator_base) :: op_r, op_a, op_z
+    real(kind=8), dimension(:,:,:), allocatable :: R
+    real(kind=8), dimension(:,:,:), allocatable :: Br, Ba, Bz
+    real(kind=8), dimension(:,:,:), allocatable :: Curl_r, Curl_a, Curl_z
+    real(kind=8), dimension(:,:,:), allocatable :: dg1, dg2, dg3
+    
+    
+    call op_a%D1(Bz, dg1)
+    dg1 = dg1 / R
+    call op_z%D1(Ba, dg2)
+    Curl_r = dg1 - dg2
+
+    
+    call op_z%D1(Br, dg1)
+    call op_r%D1(Bz, dg2)
+    Curl_a = dg1 - dg2
+
+    dg3 = Ba * R  ! calcul de r * ucBa
+    call op_r%D1(dg3, dg1)
+    dg1 = dg1 / R
+    call op_a%D1(Br, dg2)
+    dg2 = dg2 / R
+    Curl_z = dg1 - dg2
+
+  end subroutine curl
+  
+
+
+
+
+  subroutine ns_magnetic_cyl_nlinear(&
+       op_a, op_z, op_r, r, ua, uz, ur, ba, bz, br, nla, nlz, nlr, &
+       dg1, dg2, dg3, dg4, dg5, dg6, dg7, dg8, dg9)
+    implicit none
+    
+    class(t_operator_base) :: op_r, op_a, op_z
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: r
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: ua, ba, nla
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: uz, bz, nlz
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: ur, br, nlr
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: dg1, dg2, dg3
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: dg4, dg5, dg6
+    REAL(KIND=8), DIMENSION(:,:,:), ALLOCATABLE :: dg7, dg8, dg9
+    
+    call compute_A_dot_grad_B ( op_r, op_a, op_z, r, &
+         Ur, Ua, Uz, Br, Ba, Bz, DG4, DG5, DG6, &
+         dg1, dg2, dg3)
+
+    call compute_A_dot_grad_B ( op_r, op_a, op_z, r, &
+         Br, Ba, Bz, Ur, Ua, Uz, DG7, DG8, DG9, &
+         dg1, dg2, dg3)
+    
+    NLR =  DG4 - DG7
+    NLA =  DG5 - DG8
+    NLZ =  DG6 - DG9
+    
+  end subroutine ns_magnetic_cyl_nlinear
+
+  SUBROUTINE NS_INC_COLOCATED_CYL_VORTICITY(A,Z,R,OPA,OPZ,OPR,UA,UZ,UR,WA,WZ,WR,DG1,DG2,DG3)
+    IMPLICIT NONE
+    CLASS(T_OPERATOR_BASE) :: OPA,OPZ,OPR
+    REAL(DP),DIMENSION(:,:,:),ALLOCATABLE :: A,Z,R,UA,UZ,UR
+    REAL(DP),DIMENSION(:,:,:),ALLOCATABLE :: WA,WZ,WR
+    REAL(DP),DIMENSION(:,:,:),ALLOCATABLE :: DG1,DG2,DG3
+
+    CALL OPZ%D1(UR,DG1)
+    CALL OPR%D1(UZ,DG2)
+
+    WA = DG1 - DG2
+
+    DG3 = R*UA
+    CALL OPR%D1(DG3,DG1)
+    CALL OPA%D1(UR,DG2)
+
+    WZ = (DG1 -DG2)*(R)**(-1)
+
+    CALL OPA%D1(UZ,DG1)
+    CALL OPZ%D1(UA,DG2)
+
+    WR = ((R)**(-1))*DG1 - DG2
+    
+  END SUBROUTINE NS_INC_COLOCATED_CYL_VORTICITY
+
+
+  
+  SUBROUTINE NS_INC_COLOCATED_CYL_DIVERGENCE(A,Z,R,OP_A,OP_Z,OP_R, UA, UZ, UR, DIV, DG1, DG2 , DG3 )
+    IMPLICIT NONE
+    CLASS(T_OPERATOR_BASE) :: OP_A, OP_Z, OP_R
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,Z,R
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: UA, UZ, UR, DIV, DG1, DG2,DG3
+
+    DG2 = R*UR
+    
+    CALL OP_R%D1(DG2,DG1)
+    DIV  = (1D0/R)*DG1
+    
+    CALL OP_A%D1(UA,DG1)
+    DIV  = DIV + (1D0/R)*DG1
+    
+    CALL OP_Z%D1(UZ,DG1)
+    DIV = DIV + DG1 
+    
+  END SUBROUTINE NS_INC_COLOCATED_CYL_DIVERGENCE
+
+  
+  SUBROUTINE NS_INC_COLOCATED_CYL_GRADIENT(&
+       A, Z, R, OP_A, OP_Z, OP_R,FI,FI_DA, FI_DZ, FI_DR)
+    IMPLICIT NONE
+    
+    CLASS(T_OPERATOR_BASE) :: OP_A, OP_Z, OP_R
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,Z,R, FI, FI_DA, FI_DZ, FI_DR
+    
+    CALL OP_A%D1(FI,FI_DZ)
+    FI_DA = FI_DZ / R
+    
+    CALL OP_R%D1(FI,FI_DR)
+    
+    CALL OP_Z%D1(FI,FI_DZ)
+    
+  END SUBROUTINE NS_INC_COLOCATED_CYL_GRADIENT
+  
+  SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_MOMENTUM_CONV(&
+       A,Z,R,OP_A,OP_Z,OP_R, UA, UZ, UR, HA, HZ, HR,&
+       DG1, DG2, DG3, DG4, DG5, DG6, DG7, DG8, DG9)
+    IMPLICIT NONE
+    
+    CLASS(T_OPERATOR_BASE)     :: OP_A, OP_Z, OP_R
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,UA, HA
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: Z,UZ, HZ
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: R,UR, HR
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG1,DG2,DG3
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG4,DG5,DG6
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG7,DG8,DG9
+
+    
+    
+    CALL OP_R%D1(UR,DG1)
+    CALL OP_A%D1(UR,DG2)
+    CALL OP_Z%D1(UR,DG3)
+    
+    DG4 = UR*DG1 
+    DG5 = UA*DG2/R 
+    DG6 = UZ*DG3 
+    
+    HR = (DG4 + DG5 + DG6) - UA**2/R
+    
+    CALL OP_R%D1(UA,DG1)
+    CALL OP_A%D1(UA,DG2)
+    CALL OP_Z%D1(UA,DG3)
+    
+    DG4 = UR*DG1 
+    DG5 = UA*DG2/R 
+    DG6 = UZ*DG3 
+    
+    HA = (DG4 + DG5 + DG6) + UA*UR/R
+
+    CALL OP_R%D1(UZ,DG1)
+    CALL OP_A%D1(UZ,DG2)
+    CALL OP_Z%D1(UZ,DG3)
+    
+    DG4 = UR*DG1 
+    DG5 = UA*DG2/R 
+    DG6 = UZ*DG3 
+    
+    HZ = (DG4 + DG5 + DG6)
+    
+  END SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_MOMENTUM_CONV
+
+  SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_SHEAR_CONV(&
+       A,Z,R,OP_A,OP_Z,OP_R, UA, UZ, UR, prm_A, prm_B, HA, HZ, HR,&
+       DG1, DG2, DG3, DG4, DG5, DG6, DG7, DG8, DG9, DG10)
+    IMPLICIT NONE
+    
+    CLASS(T_OPERATOR_BASE)     :: OP_A, OP_Z, OP_R
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,UA, HA
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: Z,UZ, HZ
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: R,UR, HR
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG1,DG2,DG3
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG4,DG5,DG6
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG7,DG8,DG9
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG10
+    REAL(DP) :: prm_A,prm_B
+
+    DG10 = prm_A*R + prm_B/R + UA
+
+    CALL COMPUTE_NON_LINEAR_TERMS(&
+       A,Z,R,OP_A,OP_Z,OP_R, DG10, UZ, UR, HA, HZ, HR,&
+       DG1, DG2, DG3, DG4, DG5, DG6, DG7, DG8, DG9)
+
+    HZ = HZ + (prm_A + prm_B*R**(-2))**2
+
+    
+  END SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_SHEAR_CONV
+
+  SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_SCALAR_CONV(&
+       A,Z,R,OP_A,OP_Z,OP_R, UA, UZ, UR, T , HT ,&
+       DG1, DG2, DG3, DG4, DG5, DG6, DG7, DG8, DG9)
+    IMPLICIT NONE
+    
+    CLASS(T_OPERATOR_BASE)  :: OP_A, OP_Z, OP_R
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: A , UA
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: Z , UZ
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: R , UR
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: T , HT
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: DG1 , DG2 , DG3
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: DG4 , DG5 , DG6
+    REAL(KIND=8) , DIMENSION(:,:,:) , ALLOCATABLE :: DG7 , DG8 , DG9
+
+    DG4 = T*UA
+    DG5 = T*UZ
+    DG6 = T*UR
+    CALL NS_INC_COLOCATED_CYL_DIVERGENCE(A, Z, R, OP_A, OP_Z, OP_R, DG4, DG5, DG6, HT, DG1, DG2 , DG3 )
+    
+  END SUBROUTINE M_NAVIER_STOKES_CYL_NLINEAR_SCALAR_CONV
+
+
+  
+  SUBROUTINE M_NAVIER_STOKES_CYL_LINEAR_MOMENTUM(&
+       A,Z,R,OP_A,OP_Z,OP_R, NU,UA, UZ, UR, LA, LZ, LR,&
+       DG1, DG2, DG3 )
+    IMPLICIT NONE
+    
+    CLASS(T_OPERATOR_BASE)     :: OP_A, OP_Z, OP_R
+    REAL(KIND=8)               :: NU
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,UA,LA
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: Z,UZ,LZ
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: R,UR,LR
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG1,DG2,DG3,DG4
+
+    
+    CALL M_NAVIER_STOKES_CYL_LINEAR_SCALAR(A, Z, R, OP_A, OP_Z, OP_R, NU, UR, LR, DG1, DG2, DG3 )
+    CALL M_NAVIER_STOKES_CYL_LINEAR_SCALAR(A, Z, R, OP_A, OP_Z, OP_R, NU, UA, LA, DG1, DG2, DG3 )
+    CALL M_NAVIER_STOKES_CYL_LINEAR_SCALAR(A, Z, R, OP_A, OP_Z, OP_R, NU, UZ, LZ, DG1, DG2, DG3 )
+
+    CALL OP_A%D1(UA,DG1)
+    LR = LR + NU*( - UR/R**2 - 2/R**2*DG1*0 )
+
+    CALL OP_A%D1(UR,DG1)
+    LA = LA + NU*( - UA/R**2 + 2/R**2*DG1*0 )
+    
+  END SUBROUTINE M_NAVIER_STOKES_CYL_LINEAR_MOMENTUM
+
+  
+  SUBROUTINE M_NAVIER_STOKES_CYL_LINEAR_SCALAR(&
+       A, Z, R, OP_A, OP_Z, OP_R, NU, T, LT,&
+       DG1, DG2, DG3 )
+    IMPLICIT NONE
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: A,Z,R
+    CLASS(T_OPERATOR_BASE) :: OP_A, OP_Z, OP_R
+    REAL(KIND=8) :: NU
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: T,LT
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: DG1,DG2,DG3
+
+    CALL OP_R%D2(T,DG1)
+    LT = NU*DG1
+    
+    CALL OP_R%D1(T,DG1)
+    LT = LT + NU*DG1/R    
+!!$
+    CALL OP_A%D2(T,DG1)
+    LT = LT + NU*DG1/R**2    
+    
+    CALL OP_Z%D2(T,DG1)
+    LT = LT + NU*DG1    
+    
+  END SUBROUTINE M_NAVIER_STOKES_CYL_LINEAR_SCALAR
+  
+  
+  
+end module m_navier_stokes_cyl
