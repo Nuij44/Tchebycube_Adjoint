@@ -99,6 +99,7 @@ program tcheby_1d
   
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
+
   call mpi_init(ierr)
   CALL H5OPEN_F(IERR)
 
@@ -121,8 +122,6 @@ program tcheby_1d
      write(6,*)TRIM(TRIM(root_dir)//'timevar')
      OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
   end if
-
-  print*,rank
 
   
   CALL MPI_BCAST( na      , 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
