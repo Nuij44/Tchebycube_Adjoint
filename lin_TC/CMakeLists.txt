@@ -39,7 +39,7 @@ add_subdirectory(${SRC_DIR} ${BIN_DIR})
 set(EXECUTABLES
   DAL_TC.x:DAL_TC.f90
   visu_TC.x:visu_TC.f90
-  DAL_lin.x:DAL_lin.f90
+  lin_visu_TC.x:lin_visu_TC.f90	
 )
 
 # Add source file paths

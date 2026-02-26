@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --account=c1916929
+#SBATCH --account=cad17050
 #SBATCH --constraint=GENOA
-#SBATCH --job-name=Opti_TC
+#SBATCH --job-name=2Z_3000
 #SBATCH --nodes=4
 #SBATCH --ntasks=384
 #SBATCH --time=1-00:00:00
@@ -10,10 +10,10 @@
 #SBATCH --exclusive
 
 
-cd ~/tchebycube/Taylor_Couette
+cd ~/Tchebycube_Adjoint/Taylor_Couette
 source ~/./start.sh
 module load anaconda3
 conda activate Opti_1.8
 set -x
  
-python3 optimize_TC.py --np $SLURM_NTASKS --input_jac run_TC.in --input_fun run_TC_fun.in --iter 10 --output Result --exe_dir build --E0 1E-4 --tol 0.01 -v
+python3 optimize_TC.py --np $SLURM_NTASKS --input_jac run_TC.in --input_fun run_TC_fun.in --iter 10 --output Result --exe_dir build --E0 1E-5 --tol 0.01 -v
