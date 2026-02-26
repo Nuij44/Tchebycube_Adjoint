@@ -244,7 +244,7 @@ program tcheby_1d
   !Lecture de la condition initiale
   CALL IMPORT_HDF5_INIT(TRIM(init_file),UA,UZ,UR)
 
-  CALL DEALIAZING(UA,UZ,UR)
+  !CALL DEALIAZING(UA,UZ,UR)
   
   !Allocattion des tableaux pour sauver les iterations   
   if (do_adj) then

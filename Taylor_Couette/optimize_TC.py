@@ -344,7 +344,7 @@ if __name__ == '__main__':
     os.system("mkdir -p "+options.output)    
 
     try:
-        file = h5py.File('2Z_RE_10000/cond_init/init_6.h5', 'r')
+        file = h5py.File('Data/1Z_RE_10000/run2/cond_init/init_6.h5', 'r')
         init_ua = file['/dump/u1'][()]
         init_uz = file['/dump/u2'][()]
         init_ur = file['/dump/u3'][()]

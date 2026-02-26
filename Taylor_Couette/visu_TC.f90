@@ -440,9 +440,9 @@ program tcheby_1d
         
         if (nrank==0) then
            write(42,*)TC,J_U
-           write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_AZI
-           write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_VER
-           write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP
+           write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3)),E_AZI
+           write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3)),E_VER
+           write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))
         end if
         
         CALL AZIMUT_MOD_SCAL(UA,E_AZI,max_mod)
@@ -545,7 +545,7 @@ contains
     type(C_PTR) :: plan
     INTEGER :: m
 
-    DGA = UA
+    DGA = U
     call c2c_1m_x(DGA,plan_fwd_x)
     
     E_azi = 0._DP
