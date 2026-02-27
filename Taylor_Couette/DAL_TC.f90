@@ -1032,7 +1032,7 @@ contains
     UZ = DGZ
     UR = DGR
 
-    deallocate(DGA,DGZ,DGR,DGA_Y,DGZ_Y,DGR_Y)
+    !deallocate(DGA,DGZ,DGR,DGA_Y,DGZ_Y,DGR_Y)
 
 
     
