@@ -243,7 +243,7 @@ program tcheby_1d
   !Lecture de la condition initiale
   CALL IMPORT_HDF5_INIT(TRIM(init_file),UA,UZ,UR)
 
-  !CALL DEALIAZING(UA,UZ,UR)
+  CALL DEALIAZING(UA,UZ,UR)
   
   !Allocattion des tableaux pour sauver les iterations   
   if (do_adj) then
@@ -268,7 +268,7 @@ program tcheby_1d
 
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
 
-  CALL DEALIAZING(UA,UZ,UR)
+  !CALL DEALIAZING(UA,UZ,UR)
   
   DG10 = UA + PRM_A*R + PRM_B/R
   
@@ -302,7 +302,7 @@ program tcheby_1d
      SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
      SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
 
-     CALL DEALIAZING(UA,UZ,UR)
+!     CALL DEALIAZING(UA,UZ,UR)
      
      DG10 = UA + PRM_A*R + PRM_B/R
 
@@ -494,8 +494,8 @@ program tcheby_1d
         CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06)
      end if
 
-     CALL DEALIAZING(UA,UZ,UR)
-     CALL DEALIAZING(DG04,DG05,DG06)
+!     CALL DEALIAZING(UA,UZ,UR)
+!     CALL DEALIAZING(DG04,DG05,DG06)
      
      DG10 = DG04 + PRM_A*R + PRM_B/R
      
@@ -544,8 +544,8 @@ program tcheby_1d
         SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
         SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
         
-        CALL DEALIAZING(UA,UZ,UR)
-        CALL DEALIAZING(DG04,DG05,DG06)
+!        CALL DEALIAZING(UA,UZ,UR)
+!        CALL DEALIAZING(DG04,DG05,DG06)
         
         DG10 = DG04 + PRM_A*R + PRM_B/R
         
