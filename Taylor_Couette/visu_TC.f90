@@ -265,6 +265,34 @@ program tcheby_1d
   
   call preproc()
 
+  DGA = UA
+  DGZ = UZ
+  DGR = UR
+  
+    
+  call c2c_1m_x(DGA,plan_fwd_x)
+  call c2c_1m_x(DGZ,plan_fwd_x)
+  call c2c_1m_x(DGR,plan_fwd_x)
+  
+  DGA(:,:,:) = 1._DP
+  DGA(NA/3+2 : 2*NA/3, :, :) = 0._DP
+!    do i = 0, NA/6
+!       DGA(NA/2+i,:,:) = 0._DP
+!       DGA(NA/2-i,:,:) = 0._DP
+
+!       DGZ(NA/2+i,:,:) = 0._DP
+!       DGZ(NA/2-i,:,:) = 0._DP
+       
+!       DGR(NA/2+i,:,:) = 0._DP
+!       DGR(NA/2-i,:,:) = 0._DP
+!    END do
+
+    
+  
+  CALL MPI_FINALIZE(ierr)
+  STOP
+
+  
   !Lecture de la condition initiale
 
   if (nrank==0) print*,"Lecture de la condition initiale"
@@ -927,17 +955,10 @@ contains
     call c2c_1m_x(DGZ,plan_fwd_x)
     call c2c_1m_x(DGR,plan_fwd_x)
 
-    do i = 0, NA/6
-       DGA(NA/2+i,:,:) = 0._DP
-       DGA(NA/2-i,:,:) = 0._DP
-
-       DGZ(NA/2+i,:,:) = 0._DP
-       DGZ(NA/2-i,:,:) = 0._DP
-       
-       DGR(NA/2+i,:,:) = 0._DP
-       DGR(NA/2-i,:,:) = 0._DP
-    END do
-
+    DGA(NA/3+2 : 2*NA/3, :, :) = 0._DP
+    DGZ(NA/3+2 : 2*NA/3, :, :) = 0._DP
+    DGR(NA/3+2 : 2*NA/3, :, :) = 0._DP
+    
     call c2c_1m_x(DGA,plan_bck_x)
     call c2c_1m_x(DGZ,plan_bck_x)
     call c2c_1m_x(DGR,plan_bck_x)
@@ -950,17 +971,10 @@ contains
     call c2c_1m_y(DGZ_Y,plan_fwd_y)
     call c2c_1m_y(DGR_Y,plan_fwd_y)
 
-    do j = 0, NZ/6
-       DGA_Y(:,NZ/2+j,:) = 0._DP
-       DGA_Y(:,NZ/2-j,:) = 0._DP
-
-       DGZ_Y(:,NZ/2+j,:) = 0._DP
-       DGZ_Y(:,NZ/2-j,:) = 0._DP
-       
-       DGR_Y(:,NZ/2+j,:) = 0._DP
-       DGR_Y(:,NZ/2-j,:) = 0._DP
-    END do
-
+    DGA(:, NZ/3+2 : 2*NZ/3, :) = 0._DP
+    DGZ(:, NZ/3+2 : 2*NZ/3, :) = 0._DP
+    DGR(:, NZ/3+2 : 2*NZ/3, :) = 0._DP
+    
     call c2c_1m_y(DGA_Y,plan_bck_y)
     call c2c_1m_y(DGZ_Y,plan_bck_y)
     call c2c_1m_y(DGR_Y,plan_bck_y)

@@ -2,8 +2,8 @@
 #SBATCH --account=circe
 #SBATCH --constraint=amd9124
 #SBATCH --job-name=visu
-#SBATCH --nodes=1
-#SBATCH --ntasks=32
+#SBATCH --nodes=2
+#SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=32
 #SBATCH --time=5:00:00
 #SBATCH --output=visu%j.out

@@ -93,13 +93,9 @@ program tcheby_1d
   REAL(kind=8) :: sigma,omega_tilde,noise,res,alpha,beta
   
   REAL(DP),DIMENSION(:,:,:,:),ALLOCATABLE :: SAVE_UA,SAVE_UZ,SAVE_UR
-
-  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA,DGZ,DGR
-  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA_Y,DGZ_Y,DGR_Y
   
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
-
   call mpi_init(ierr)
   CALL H5OPEN_F(IERR)
 
@@ -122,6 +118,8 @@ program tcheby_1d
      write(6,*)TRIM(TRIM(root_dir)//'timevar')
      OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
   end if
+
+  print*,rank
 
   
   CALL MPI_BCAST( na      , 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
@@ -216,25 +214,22 @@ program tcheby_1d
 
   CALL EQN_UA%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=1 )
   CALL EQN_UA%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
-  CALL EQN_UA%INITIALISE_SVV( MSH, OPA, OPZ, OPR,ALPHA,BETA,PH )
-  !CALL EQN_UA%INITIALISE( MSH, OPA, OPZ, OPR,PH)
+  CALL EQN_UA%INITIALISE_SVV( MSH, OPA, OPZ, OPR, ALPHA, BETA,PH )
   CALL EQN_UA%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
   
   CALL EQN_UZ%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=2 )
   CALL EQN_UZ%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
   CALL EQN_UZ%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-  !CALL EQN_UZ%INITIALISE( MSH, OPA, OPZ, OPR,PH)
   CALL EQN_UZ%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
   
   CALL EQN_UR%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=3 )
   CALL EQN_UR%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
   CALL EQN_UR%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-  !CALL EQN_UR%INITIALISE( MSH, OPA, OPZ, OPR,PH)
   CALL EQN_UR%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
 
   CALL EQN_FI%SET_PARAMS( NU=NU_POISSON , SIGMA=0D0 , AXIS=0 )
   CALL EQN_FI%SET_BCS( AXIS=3 , BCS_MINUS=NEUMANN , BCS_PLUS=NEUMANN )
-  CALL EQN_FI%INITIALISE( MSH, OPA, OPZ, OPR,PH)
+  CALL EQN_FI%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
   CALL EQN_FI%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
   
   
@@ -242,15 +237,13 @@ program tcheby_1d
 
   !Lecture de la condition initiale
   CALL IMPORT_HDF5_INIT(TRIM(init_file),UA,UZ,UR)
-
-!  CALL DEALIAZING(UA,UZ,UR)
   
   !Allocattion des tableaux pour sauver les iterations   
   if (do_adj) then
      if (memoire) then
-        ALLOCATE(SAVE_UA(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
-        ALLOCATE(SAVE_UZ(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
-        ALLOCATE(SAVE_UR(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
+        ALLOCATE(SAVE_UA(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
+        ALLOCATE(SAVE_UZ(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
+        ALLOCATE(SAVE_UR(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
   
         SAVE_UA(0,:,:,:) = UA(:,:,:)
         SAVE_UZ(0,:,:,:) = UZ(:,:,:)
@@ -268,8 +261,6 @@ program tcheby_1d
 
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
 
-  !CALL DEALIAZING(UA,UZ,UR)
-  
   DG10 = UA + PRM_A*R + PRM_B/R
   
   CALL COMPUTE_NON_LINEAR_TERMS(&
@@ -302,8 +293,6 @@ program tcheby_1d
      SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
      SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
 
-!     CALL DEALIAZING(UA,UZ,UR)
-     
      DG10 = UA + PRM_A*R + PRM_B/R
 
      CALL COMPUTE_NON_LINEAR_TERMS(&
@@ -387,12 +376,11 @@ program tcheby_1d
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
 
-     if (do_adj .AND. MOD(IT_TIME,2)==0) then
-!     if (do_adj) then
+     if (do_adj .AND. MOD(IT_TIME,1)==0) then
         if (memoire) then
-           SAVE_UA(it_time/2,:,:,:) = UA(:,:,:)
-           SAVE_UZ(it_time/2,:,:,:) = UZ(:,:,:)
-           SAVE_UR(it_time/2,:,:,:) = UR(:,:,:)
+           SAVE_UA(it_time/1,:,:,:) = UA(:,:,:)
+           SAVE_UZ(it_time/1,:,:,:) = UZ(:,:,:)
+           SAVE_UR(it_time/1,:,:,:) = UR(:,:,:)
         else
            write(num,'(I6.6)')it_time
            filename = trim(base_save)//num//'.h5'
@@ -409,7 +397,7 @@ program tcheby_1d
      CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
      CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
      
-     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*0.5_DP
+     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
      if (nrank==0) write(42,*)dt,J_U
 
@@ -445,25 +433,22 @@ program tcheby_1d
 
      CALL EQN_UA_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=1 )
      CALL EQN_UA_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
-     CALL EQN_UA_AD%INITIALISE_SVV( MSH, OPA, OPZ, OPR, ALPHA,BETA,PH )
-     !CALL EQN_UA_AD%INITIALISE( MSH, OPA, OPZ, OPR, PH )
+     CALL EQN_UA_AD%INITIALISE_SVV( MSH, OPA, OPZ, OPR, ALPHA, BETA, PH )
      CALL EQN_UA_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
      
      CALL EQN_UZ_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=2 )
      CALL EQN_UZ_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
      CALL EQN_UZ_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-     !CALL EQN_UZ_AD%INITIALISE( MSH, OPA, OPZ, OPR, PH )
      CALL EQN_UZ_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
   
      CALL EQN_UR_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=3)
      CALL EQN_UR_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
      CALL EQN_UR_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-     !CALL EQN_UR_AD%INITIALISE( MSH, OPA, OPZ, OPR, PH )
      CALL EQN_UR_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
 
      CALL EQN_FI_AD%SET_PARAMS( NU=NU_POISSON , SIGMA=0D0 , AXIS=0)
      CALL EQN_FI_AD%SET_BCS( AXIS=3 , BCS_MINUS=NEUMANN , BCS_PLUS=NEUMANN )
-     CALL EQN_FI_AD%INITIALISE( MSH, OPA, OPZ, OPR, PH )
+     CALL EQN_FI_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
      CALL EQN_FI_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
 
   
@@ -485,18 +470,15 @@ program tcheby_1d
      
      PRES = 0._DP
      if (memoire) then
-        DG04(:,:,:) = SAVE_UA(nb_iter/2,:,:,:)
-        DG05(:,:,:) = SAVE_UZ(nb_iter/2,:,:,:)
-        DG06(:,:,:) = SAVE_UR(nb_iter/2,:,:,:)
+        DG04(:,:,:) = SAVE_UA(nb_iter/1,:,:,:)
+        DG05(:,:,:) = SAVE_UZ(nb_iter/1,:,:,:)
+        DG06(:,:,:) = SAVE_UR(nb_iter/1,:,:,:)
      else
         write(num,'(I6.6)')nb_iter
         filename = trim(base_save)//num//'.h5'
         CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06)
      end if
 
-!     CALL DEALIAZING(UA,UZ,UR)
-!     CALL DEALIAZING(DG04,DG05,DG06)
-     
      DG10 = DG04 + PRM_A*R + PRM_B/R
      
      CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
@@ -531,9 +513,9 @@ program tcheby_1d
 !           DG05 = SAVE_UZ(nb_iter-it_time+1,:,:,:)
 !           DG06 = SAVE_UR(nb_iter-it_time+1,:,:,:)
 
-           CALL INTERPOLATION(2,SAVE_UA(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG04)
-           CALL INTERPOLATION(2,SAVE_UZ(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG05)
-           CALL INTERPOLATION(2,SAVE_UR(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG06)
+           CALL INTERPOLATION(1,SAVE_UA(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG04)
+           CALL INTERPOLATION(1,SAVE_UZ(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG05)
+           CALL INTERPOLATION(1,SAVE_UR(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG06)
         end if
         
         
@@ -543,10 +525,7 @@ program tcheby_1d
         SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
         SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
         SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
-        
-!        CALL DEALIAZING(UA,UZ,UR)
-!        CALL DEALIAZING(DG04,DG05,DG06)
-        
+
         DG10 = DG04 + PRM_A*R + PRM_B/R
         
         CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
@@ -636,8 +615,29 @@ program tcheby_1d
         call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
         if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime
 
+        if (cfl .GT. 10.) exit
+
+     
      end DO
 
+     !projection du gradient pour divegence nulle.
+     call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
+     
+     call EQN_FI_AD%SOLVE(FI,SFI,0._DP,PH)
+     
+     CALL GRAD(A,Z,R,OPA, OPZ, OPR, FI, DG01, DG02, DG03)
+
+     UA = UA - DG01
+     UZ = UZ - DG02
+     UR = UR - DG03
+
+     call DIV( A,Z,R,OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
+     is = get_is()
+     ie = get_ie()
+     DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))     
+     CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+     if (nrank==0) print*,"Div Grad J = ",div_max 
+     
      !Ecriture du gradient
      FILENAME = TRIM(root_dir)//'grad.h5'
      call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
@@ -855,15 +855,6 @@ contains
     call alloc_x(NLAM1  , OPT_GLOBAL=.TRUE.) ; NLAM1 = 0._DP
     call alloc_x(NLZM1  , OPT_GLOBAL=.TRUE.) ; NLZM1 = 0._DP
     call alloc_x(NLRM1  , OPT_GLOBAL=.TRUE.) ; NLRM1 = 0._DP
-
-    call alloc_x(DGA , OPT_GLOBAL=.TRUE.) ; DGA = 0._DP
-    call alloc_x(DGZ , OPT_GLOBAL=.TRUE.) ; DGZ = 0._DP
-    call alloc_x(DGR , OPT_GLOBAL=.TRUE.) ; DGR = 0._DP
-
-    call alloc_y(DGA_Y , OPT_GLOBAL=.TRUE.) ; DGA_Y = 0._DP
-    call alloc_y(DGZ_Y , OPT_GLOBAL=.TRUE.) ; DGZ_Y = 0._DP
-    call alloc_y(DGR_Y , OPT_GLOBAL=.TRUE.) ; DGR_Y = 0._DP
-
     
     FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
        A(I,J,K) = MSH(1)%X(I)
@@ -970,74 +961,5 @@ contains
     
     close(id)
   end subroutine export_tecplot
-
-
-  subroutine dealiazing(ua,uz,ur)
-    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(inout) :: UA,UZ,UR
-    integer :: i,j
-
-    DGA = UA
-    DGZ = UZ
-    DGR = UR
-
     
-    call c2c_1m_x(DGA,plan_fwd_x)
-    call c2c_1m_x(DGZ,plan_fwd_x)
-    call c2c_1m_x(DGR,plan_fwd_x)
-
-    do i = 0, NA/6
-       DGA(NA/2+i,:,:) = 0._DP
-       DGA(NA/2-i,:,:) = 0._DP
-
-       DGZ(NA/2+i,:,:) = 0._DP
-       DGZ(NA/2-i,:,:) = 0._DP
-       
-       DGR(NA/2+i,:,:) = 0._DP
-       DGR(NA/2-i,:,:) = 0._DP
-    END do
-
-    call c2c_1m_x(DGA,plan_bck_x)
-    call c2c_1m_x(DGZ,plan_bck_x)
-    call c2c_1m_x(DGR,plan_bck_x)
-
-    call transpose_x_to_y(DGA, DGA_Y)
-    call transpose_x_to_y(DGZ, DGZ_Y)
-    call transpose_x_to_y(DGR, DGR_Y)
-    
-    call c2c_1m_y(DGA_Y,plan_fwd_y)
-    call c2c_1m_y(DGZ_Y,plan_fwd_y)
-    call c2c_1m_y(DGR_Y,plan_fwd_y)
-
-    do j = 0, NZ/6
-       DGA_Y(:,NZ/2+j,:) = 0._DP
-       DGA_Y(:,NZ/2-j,:) = 0._DP
-
-       DGZ_Y(:,NZ/2+j,:) = 0._DP
-       DGZ_Y(:,NZ/2-j,:) = 0._DP
-       
-       DGR_Y(:,NZ/2+j,:) = 0._DP
-       DGR_Y(:,NZ/2-j,:) = 0._DP
-    END do
-
-    call c2c_1m_y(DGA_Y,plan_bck_y)
-    call c2c_1m_y(DGZ_Y,plan_bck_y)
-    call c2c_1m_y(DGR_Y,plan_bck_y)
-
-    call transpose_y_to_x(DGA_Y, DGA)
-    call transpose_y_to_x(DGZ_Y, DGZ)
-    call transpose_y_to_x(DGR_Y, DGR)
-
-    
-    UA = DGA
-    UZ = DGZ
-    UR = DGR
-
-    !deallocate(DGA,DGZ,DGR,DGA_Y,DGZ_Y,DGR_Y)
-
-
-    
-  end subroutine dealiazing
-
-    
-
 end program tcheby_1d

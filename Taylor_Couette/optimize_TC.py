@@ -336,27 +336,27 @@ if __name__ == '__main__':
 
     #Initialisation à partir d'un random
     
-    N = [129, 33, 65]
+    N = [97, 49, 49]
     init_ua = 2.*np.random.random(N)-np.ones(N)
     init_uz = 2.*np.random.random(N)-np.ones(N)
     init_ur = 2.*np.random.random(N)-np.ones(N)
 
     os.system("mkdir -p "+options.output)    
 
-    try:
-        file = h5py.File('Data/1Z_RE_10000/run1/cond_init/init_6.h5', 'r')
-        init_ua = file['/dump/u1'][()]
-        init_uz = file['/dump/u2'][()]
-        init_ur = file['/dump/u3'][()]
+#    try:
+#        file = h5py.File('Data/1Z_RE_10000/run1/cond_init/init_6.h5', 'r')
+#        init_ua = file['/dump/u1'][()]
+#        init_uz = file['/dump/u2'][()]
+#        init_ur = file['/dump/u3'][()]
         
         #transposition des données pour avoir un ordre colonne major
         #data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
         
-        data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
-    except: 
-        print("The current directory is "+os.getcwd())
-        print("%s is not inside this directory ?" % str_file) 
-        sys.exit(1)
+#        data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
+#    except: 
+#        print("The current directory is "+os.getcwd())
+#        print("%s is not inside this directory ?" % str_file) 
+#        sys.exit(1)
 
     
     data_dns_start=[init_ua, init_uz, init_ur]
