@@ -94,7 +94,7 @@ program tcheby_1d
   REAL(KIND=8),DIMENSION(3) :: NU_MOMENTUM
   REAL(KIND=8),DIMENSION(3) :: NU_ENERGY
   REAL(KIND=8),DIMENSION(3) :: NU_POISSON
-  REAL(kind=8) :: sigma,omega_tilde,noise,res
+  REAL(kind=8) :: sigma,omega_tilde,noise,res,theta,signal_attendu
 
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
@@ -104,7 +104,7 @@ program tcheby_1d
 
   REAL(DP),ALLOCATABLE,DIMENSION(:) :: E_azi, E_ver, sp_a, sp_z
 
-  INTEGER,PARAMETER :: max_mod=10
+  INTEGER,PARAMETER :: max_mod=13
 
   call mpi_init(ierr)
   CALL H5OPEN_F(IERR)
@@ -126,6 +126,8 @@ program tcheby_1d
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//trim(snap_dir) )
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/vorticity' )
      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/spectre' )
+     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/modal_nrj_azimutal' )
+     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/modal_nrj_vertical' )
      write(*,parameters_cube)
      write(*,parameters_physical)
      write(*,parameters_diagnostics)
@@ -135,6 +137,13 @@ program tcheby_1d
      OPEN(UNIT=70, FILE=trim(root_dir)//'r_vect.dat')
      OPEN(UNIT=80, FILE=trim(root_dir)//'/spectre/azimut.dat')
      OPEN(UNIT=90, FILE=trim(root_dir)//'/spectre/vertic.dat')
+     OPEN(UNIT=101, FILE=trim(root_dir)//'/modal_nrj_azimutal/ua.dat')
+     OPEN(UNIT=102, FILE=trim(root_dir)//'/modal_nrj_azimutal/uz.dat')
+     OPEN(UNIT=103, FILE=trim(root_dir)//'/modal_nrj_azimutal/ur.dat')
+     OPEN(UNIT=111, FILE=trim(root_dir)//'/modal_nrj_vertical/ua.dat')
+     OPEN(UNIT=112, FILE=trim(root_dir)//'/modal_nrj_vertical/uz.dat')
+     OPEN(UNIT=113, FILE=trim(root_dir)//'/modal_nrj_vertical/ur.dat')
+
   end if
 
   
@@ -196,7 +205,6 @@ program tcheby_1d
   vort_snap = trim(root_dir)//'vorticity/snap_'
   base_save = trim(root_dir)//'save/save_'
 
-  
    ! GRILLE 2D
   CALL DECOMP_2D_INIT( &
        NX = N(1)+1, NY = N(2)+1, NZ = N(3)+1 , P_ROW= CPU_GRID(1) , P_COL= CPU_GRID(2) )
@@ -257,29 +265,58 @@ program tcheby_1d
   
   call preproc()
 
+  DGA = UA
+  DGZ = UZ
+  DGR = UR
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+
+
+  ! === TEST 2 : avec troncature ===
+  do i = 1, NA+1
+     div_max = 2._DP * PI * real(i-1, DP) / real(NA+1, DP)
+     DGA(i,:,:) = cmplx( cos(2*div_max) + cos((NA/3+2)*div_max), 0._DP, DP)
+  end do
+  DG01 = DGA
+  call c2c_1m_x(DGA, plan_fwd_x)
+  DGA(NA/3+2 : NA/2+1,   :, :) = 0._DP
+  DGA(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+  call c2c_1m_x(DGA, plan_bck_x)
+  
+  if (nrank==0) then
+     write(*,'(A)') "=== Apres troncature ==="
+     write(*,'(A6,A14,A14,A14)') "i","obtenu","attendu","erreur"
+     do i = 1, NA+1
+        div_max = 2._DP * PI * real(i-1, DP) / real(NA+1, DP)
+        signal_attendu = cos(2*div_max)   ! seulement le mode k=2
+        write(*,'(I6,3F14.8)') i, real(DGA(i,1,1),DP),signal_attendu,real(DGA(i,1,1),DP) - signal_attendu
+     end do
+  end if
+
+  DG03 = 0._DP
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG03(I,J,K) = ABS(DG01(I,J,K) - DGA(I,J,K))
+  END FORALL
+
+    print*,nrank," error : ",MAXVAL(DG03),MAXLOC(DG03)
+    stop
+  
+
+  
   !Lecture de la condition initiale
+
+  if (nrank==0) print*,"Lecture de la condition initiale"
+  if (nrank==0) print*,TRIM(init_file)
+  
   CALL IMPORT_HDF5_INIT(TRIM(init_file),DG01,DG02,DG03)
+
+  if (nrank==0) print*,"Fin de lecture de la condition initiale"
 
   UA = DG01
   UZ = DG02
   UR = DG03
 
   CALL DEALIAZING(UA,UZ,UR)
-
-  CALL AZIMUT_MOD(UA,UZ,UR,SP_A,NA/2)
-  CALL VERTIC_MOD(UA,UZ,UR,SP_Z,NZ/2)
-
-  tc = 0._DP
-  
-  if (nrank==0) then
-     write(form,'(i3)')na/2
-     write(80,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_a
-     
-     write(form,'(i3)')nz/2
-     write(90,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z
-  end if
-
-
   
   filename = trim(base_snap)//'grid.h5'
   call update_id_and_time(trim(filename),snap_dt,snap_id)
@@ -423,17 +460,8 @@ program tcheby_1d
      CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
      CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
      
-     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*0.5_DP
+     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
-     CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
-     CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
-     
-     if (nrank==0) then
-        write(42,*)TC,J_U
-        write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_AZI
-        write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_VER
-        write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP
-     end if
 
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
      
@@ -443,7 +471,42 @@ program tcheby_1d
         stop
      end if
 
-!     if (mod(it_time,10000)==1) then
+     if (mod(it_time,1000)==1) then
+
+        CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
+        CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
+        
+        if (nrank==0) then
+           write(42,*)TC,J_U
+           write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3)),E_AZI
+           write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3)),E_VER
+           write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))
+        end if
+        
+        CALL AZIMUT_MOD_SCAL(UA,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UA,E_VER,max_mod)
+     
+        if (nrank == 0) then
+           write(101,'(15(e15.8))')TC,E_AZI
+           write(111,'(15(e15.8))')TC,E_VER
+        end if
+        
+        CALL AZIMUT_MOD_SCAL(UZ,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UZ,E_VER,max_mod)
+        
+        if (nrank == 0) then
+           write(102,'(15(e15.8))')TC,E_AZI
+           write(112,'(15(e15.8))')TC,E_VER
+        end if
+
+        CALL AZIMUT_MOD_SCAL(UR,E_AZI,max_mod)
+        CALL VERTIC_MOD_SCAL(UR,E_VER,max_mod)
+        
+        if (nrank == 0) then
+           write(103,'(15(e15.8))')TC,E_AZI
+           write(113,'(15(e15.8))')TC,E_VER
+        end if
+
         filename = trim(base_snap)//'grid.h5'
         call update_id_and_time(trim(filename),snap_dt,snap_id)
         WRITE(num,'(I6.6)')snap_id
@@ -455,7 +518,7 @@ program tcheby_1d
         filename = trim(vort_snap)//num//'.h5'
         call EXPORT_snapshot(trim(FILENAME),DG01,DG02,DG03,pres,PRES)
 
- !    end if
+     end if
 
      if (mod(it_time,1000)==1) then
         CALL AZIMUT_MOD(UA,UZ,UR,SP_A,NA/2)
@@ -512,6 +575,30 @@ contains
 
   end SUBROUTINE azimut_mod
 
+    SUBROUTINE azimut_mod_scal(U,E_azi,max_mod)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: U
+    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_azi
+    INTEGER,intent(in) :: max_mod
+
+    type(C_PTR) :: plan
+    INTEGER :: m
+
+    DGA = U
+    call c2c_1m_x(DGA,plan_fwd_x)
+    
+    E_azi = 0._DP
+    do m = 0,max_mod-1
+       do k = PH%XST(3), PH%XEN(3)
+          do j = PH%XST(2), PH%XEN(2)
+             E_azi(m) = E_azi(m) + ABS(DGA(m+1,j,k))**2
+          end do
+       end do
+    end do
+
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_azi,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
+
+  end SUBROUTINE azimut_mod_scal
+
 
   SUBROUTINE vertic_mod(UA,UZ,UR,E_ver,max_mod)
     REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: UA,UZ,UR
@@ -545,6 +632,34 @@ contains
     CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_ver,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
 
   end SUBROUTINE vertic_mod
+
+  SUBROUTINE vertic_mod_scal(U,E_ver,max_mod)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: U
+    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_ver
+    INTEGER,intent(in) :: max_mod
+
+    type(C_PTR) :: plan
+    INTEGER :: m
+    
+    DGA = U
+
+    call transpose_x_to_y(DGA, DGA_Y)
+    
+    call c2c_1m_y(DGA_Y,plan_fwd_y)
+
+    E_ver = 0._DP
+    do m = 0,max_mod-1
+       do k = PH%YST(3), PH%YEN(3)
+          do i = PH%YST(1), PH%YEN(1)
+             E_ver(m) = E_ver(m) + ABS(DGA_Y(i,m+1,k))**2
+          end do
+       end do
+    end do
+
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_ver,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
+    
+  end SUBROUTINE vertic_mod_scal
+
   
   function get_is_b(halo) result(res)
         implicit none
@@ -850,16 +965,12 @@ contains
     call c2c_1m_x(DGZ,plan_fwd_x)
     call c2c_1m_x(DGR,plan_fwd_x)
 
-    do i = 0, NA/6
-       DGA(NA/2+i,:,:) = 0._DP
-       DGA(NA/2-i,:,:) = 0._DP
-
-       DGZ(NA/2+i,:,:) = 0._DP
-       DGZ(NA/2-i,:,:) = 0._DP
-       
-       DGR(NA/2+i,:,:) = 0._DP
-       DGR(NA/2-i,:,:) = 0._DP
-    END do
+    DGA(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGA(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+    DGZ(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGZ(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+    DGR(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGR(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
 
     call c2c_1m_x(DGA,plan_bck_x)
     call c2c_1m_x(DGZ,plan_bck_x)
@@ -873,17 +984,13 @@ contains
     call c2c_1m_y(DGZ_Y,plan_fwd_y)
     call c2c_1m_y(DGR_Y,plan_fwd_y)
 
-    do j = 0, NZ/6
-       DGA_Y(:,NZ/2+j,:) = 0._DP
-       DGA_Y(:,NZ/2-j,:) = 0._DP
-
-       DGZ_Y(:,NZ/2+j,:) = 0._DP
-       DGZ_Y(:,NZ/2-j,:) = 0._DP
-       
-       DGR_Y(:,NZ/2+j,:) = 0._DP
-       DGR_Y(:,NZ/2-j,:) = 0._DP
-    END do
-
+    DGA(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGA(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    DGZ(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGZ(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    DGR(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGR(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    
     call c2c_1m_y(DGA_Y,plan_bck_y)
     call c2c_1m_y(DGZ_Y,plan_bck_y)
     call c2c_1m_y(DGR_Y,plan_bck_y)
@@ -899,5 +1006,5 @@ contains
     
   end subroutine dealiazing
 
-   
+    
 end program tcheby_1d

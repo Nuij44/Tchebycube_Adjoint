@@ -93,6 +93,9 @@ program tcheby_1d
   REAL(kind=8) :: sigma,omega_tilde,noise,res,alpha,beta
   
   REAL(DP),DIMENSION(:,:,:,:),ALLOCATABLE :: SAVE_UA,SAVE_UZ,SAVE_UR
+
+  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA,DGZ,DGR
+  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA_Y,DGZ_Y,DGR_Y
   
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
@@ -255,12 +258,15 @@ program tcheby_1d
      end if
   end if
 
-  UAM1 = UA
-  UZM1 = UZ
-  URM1 = UR
+  SA = UA/DT
+  SZ = UZ/DT
+  SR = UR/DT
 
+  
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
 
+  CALL dealiazing(ua,uz,ur)
+  
   DG10 = UA + PRM_A*R + PRM_B/R
   
   CALL COMPUTE_NON_LINEAR_TERMS(&
@@ -274,12 +280,109 @@ program tcheby_1d
        A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
        DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
 
-  NLAM1 = NLAM1 - DG11
-  NLZM1 = NLZM1 - DG12
-  NLRM1 = NLRM1 - DG13
+  NLA = NLAM1 - DG11
+  NLZ = NLZM1 - DG12
+  NLR = NLRM1 - DG13
+
+  TC = dt
+
+  CALL OPA%D1(UA,SFI)
+  DG01 = NU*(-2._DP/R**2)*SFI
+  CALL OPA%D1(UR,SFI)
+  DG02 = NU*(+2._DP/R**2)*SFI
+
+  NLR = NLR - DG01 
+  NLA = NLA - DG02 
+  NLZ = NLZ 
+     
+  SA = SA - NLA 
+  SZ = SZ - NLZ 
+  SR = SR - NLR
+     
+  NLAM1 = NLA
+  NLZM1 = NLZ
+  NLRM1 = NLR
+
+  UAM1=UA
+  UZM1=UZ
+  URM1=UR
+
+  SIGMA = 1._DP/DT
+
+  CALL EQN_UA%SOLVE(UA, SA, SIGMA ,PH)
+  CALL EQN_UZ%SOLVE(UZ, SZ, SIGMA ,PH)
+  CALL EQN_UR%SOLVE(UR, SR, SIGMA ,PH)
+        
+        
+  call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
+  SFI = SFI/DT
+
+  call EQN_FI%SOLVE(FI,SFI,0._DP,PH)
+        
+  CALL GRAD(A, Z, R, OPA, OPZ, OPR, FI, DG01, DG02, DG03)
+        
+  PRES = FI
+        
+        
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UA(I,J,K) = UA(I,J,K) - DG01(I,J,K) * DT
+  END FORALL
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UZ(I,J,K) = UZ(I,J,K) - DG02(I,J,K) * DT 
+  END FORALL
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * DT 
+  END FORALL
+
+  if (do_adj .AND. MOD(IT_TIME,1)==0) then
+     if (memoire) then
+        SAVE_UA(it_time/1,:,:,:) = UA(:,:,:)
+        SAVE_UZ(it_time/1,:,:,:) = UZ(:,:,:)
+        SAVE_UR(it_time/1,:,:,:) = UR(:,:,:)
+     else
+        write(num,'(I6.6)')it_time
+        filename = trim(base_save)//num//'.h5'
+        call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
+     end if
+  end if
+
+  
+  !Calcul de J(u) = int_domaine <u,u> + <t,t>
+  DG04 = UA*UA*R
+  DG05 = UZ*UZ*R
+  DG06 = UR*UR*R
+
+  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+  
+  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
+
+  
+  ! check divergence 
+  call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
+  is = get_is()
+  ie = get_ie()
+  DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+  
+  endtime   = MPI_Wtime();
+  endtime =  endtime-starttime
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+     
+  
+  call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
+  it_time = 1
+  if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
   
     
-  DO IT_time=1,nb_iter
+  DO IT_time=2,nb_iter
      
      tc = tc + dt
      snap_dt = snap_dt + dt
@@ -293,6 +396,8 @@ program tcheby_1d
      SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
      SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
 
+     CALL dealiazing(ua,uz,ur)
+     
      DG10 = UA + PRM_A*R + PRM_B/R
 
      CALL COMPUTE_NON_LINEAR_TERMS(&
@@ -372,7 +477,18 @@ program tcheby_1d
      endtime =  endtime-starttime
      CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
      
-       
+     !Calcul de J(u) = int_domaine <u,u> + <t,t>
+     DG04 = UA*UA*R
+     DG05 = UZ*UZ*R
+     DG06 = UR*UR*R
+
+     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     
+     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
+
+     
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
 
@@ -387,17 +503,6 @@ program tcheby_1d
            call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
         end if
      end if
-
-     !Calcul de J(u) = int_domaine <u,u> + <t,t>
-     DG04 = UA*UA*R
-     DG05 = UZ*UZ*R
-     DG06 = UR*UR*R
-
-     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
      if (nrank==0) write(42,*)dt,J_U
 
@@ -479,6 +584,9 @@ program tcheby_1d
         CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06)
      end if
 
+     CALL dealiazing(ua,uz,ur)
+     CALL dealiazing(DG04,DG05,DG06)
+     
      DG10 = DG04 + PRM_A*R + PRM_B/R
      
      CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
@@ -526,6 +634,9 @@ program tcheby_1d
         SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
         SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
 
+        CALL dealiazing(ua,uz,ur)
+        CALL dealiazing(DG04,DG05,DG06)
+        
         DG10 = DG04 + PRM_A*R + PRM_B/R
         
         CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
@@ -808,7 +919,14 @@ contains
     implicit none
     real(kind=8) ::coeff_p(3)
 
+    call alloc_x(DGA , OPT_GLOBAL=.TRUE.) ; DGA = 0._DP
+    call alloc_x(DGZ , OPT_GLOBAL=.TRUE.) ; DGZ = 0._DP
+    call alloc_x(DGR , OPT_GLOBAL=.TRUE.) ; DGR = 0._DP
 
+    call alloc_y(DGA_Y , OPT_GLOBAL=.TRUE.) ; DGA_Y = 0._DP
+    call alloc_y(DGZ_Y , OPT_GLOBAL=.TRUE.) ; DGZ_Y = 0._DP
+    call alloc_y(DGR_Y , OPT_GLOBAL=.TRUE.) ; DGR_Y = 0._DP
+   
     call alloc_x(DG01 , OPT_GLOBAL=.TRUE.) ; DG01 = 0
     call alloc_x(DG02 , OPT_GLOBAL=.TRUE.) ; DG02 = 0
     call alloc_x(DG03 , OPT_GLOBAL=.TRUE.) ; DG03 = 0
@@ -961,5 +1079,61 @@ contains
     
     close(id)
   end subroutine export_tecplot
+
+  subroutine dealiazing(ua,uz,ur)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,UZ,UR
+    integer :: i
     
+
+    DGA = UA
+    DGZ = UZ
+    DGR = UR
+
+    
+    call c2c_1m_x(DGA,plan_fwd_x)
+    call c2c_1m_x(DGZ,plan_fwd_x)
+    call c2c_1m_x(DGR,plan_fwd_x)
+
+    DGA(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGA(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+    DGZ(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGZ(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+    DGR(NA/3+2 : NA/2+1,   :, :) = 0._DP
+    DGR(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
+
+    call c2c_1m_x(DGA,plan_bck_x)
+    call c2c_1m_x(DGZ,plan_bck_x)
+    call c2c_1m_x(DGR,plan_bck_x)
+
+    call transpose_x_to_y(DGA, DGA_Y)
+    call transpose_x_to_y(DGZ, DGZ_Y)
+    call transpose_x_to_y(DGR, DGR_Y)
+    
+    call c2c_1m_y(DGA_Y,plan_fwd_y)
+    call c2c_1m_y(DGZ_Y,plan_fwd_y)
+    call c2c_1m_y(DGR_Y,plan_fwd_y)
+
+    DGA(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGA(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    DGZ(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGZ(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    DGR(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
+    DGR(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    
+    call c2c_1m_y(DGA_Y,plan_bck_y)
+    call c2c_1m_y(DGZ_Y,plan_bck_y)
+    call c2c_1m_y(DGR_Y,plan_bck_y)
+
+    call transpose_y_to_x(DGA_Y, DGA)
+    call transpose_y_to_x(DGZ_Y, DGZ)
+    call transpose_y_to_x(DGR_Y, DGR)
+
+    UA = DGA
+    UZ = DGZ
+    UR = DGR
+    
+    
+  end subroutine dealiazing
+
+  
 end program tcheby_1d
