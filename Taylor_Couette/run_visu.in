@@ -1,7 +1,7 @@
 &parameters_cube
-na = 12 , 
-nz = 8 ,
-nr = 8 ,
+na = 64 , 
+nz = 64 ,
+nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
 z_min = 0.0 ,

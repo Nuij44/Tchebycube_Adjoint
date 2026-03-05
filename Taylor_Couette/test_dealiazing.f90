@@ -104,7 +104,7 @@ program tcheby_1d
 
   REAL(DP),ALLOCATABLE,DIMENSION(:) :: E_azi, E_ver, sp_a, sp_z
 
-  INTEGER,PARAMETER :: max_mod=13
+  INTEGER,PARAMETER :: max_mod=33
 
   call mpi_init(ierr)
   CALL H5OPEN_F(IERR)
@@ -271,7 +271,242 @@ program tcheby_1d
   is = get_is_b([0,0,0])
   ie = get_ie_b([0,0,0])
 
+  CALL RANDOM_SEED()
 
+  do i = 2, (NA+1)/2 +1
+     CALL RANDOM_NUMBER(err)
+     DG01(i,:,:) = err
+     DG01((NA+1)/2 +i ,:,:) = err
+
+     CALL RANDOM_NUMBER(err)
+     DG02(i,:,:) = err
+     DG02((NA+1)/2 +i ,:,:) = err
+  end do
+!     CALL Random_Number(DG01(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+!     CALL Random_Number(DG02(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+
+!  DG01 = 1._DP
+  DG02 = 1._DP
+  
+  
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  !aliasing
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  call c2c_1m_x(DGA, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=300, FILE="Prod_base.dat")
+     open(UNIT=301, FILE="U_base.dat")
+     do i=is(1),ie(1)
+        write(300,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+        write(301,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 1/2
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,NA/4)
+  call dealiazing_spec(DGZ,DGZ,DGZ,NA/4)
+
+
+  
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  call c2c_1m_x(DGA, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=400, FILE="Prod_05.dat")
+     open(UNIT=401, FILE="U_05.dat")
+     do i=is(1),ie(1)
+        write(400,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+        write(401,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 1/3
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,NA/3)
+  call dealiazing_spec(DGZ,DGZ,DGZ,NA/3)
+
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  call c2c_1m_x(DGA, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=500, FILE="Prod_03.dat")
+     open(UNIT=501, FILE="U_03.dat")
+     do i=is(1),ie(1)
+        write(500,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+        write(501,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 1/4
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,NA/8)
+  call dealiazing_spec(DGZ,DGZ,DGZ,NA/8)
+
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=600, FILE="Prod_025.dat")
+     do i=is(1),ie(1)
+        write(600,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 1/5
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,NA/10)
+  call dealiazing_spec(DGZ,DGZ,DGZ,NA/10)
+
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=700, FILE="Prod_02.dat")
+     do i=is(1),ie(1)
+        write(700,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 3/4
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,3*NA/8)
+  call dealiazing_spec(DGZ,DGZ,DGZ,3*NA/8)
+
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  call c2c_1m_x(DGA, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=800, FILE="Prod_075.dat")
+     open(UNIT=801, FILE="U_075.dat")
+     do i=is(1),ie(1)
+        write(800,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+        write(801,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+     end do
+  end if
+
+  !Coupure 9/10
+  DGA = CMPLX(DG01,0._DP)
+  DGZ = CMPLX(DG02,0._DP)
+
+  call dealiazing_spec(DGA,DGA,DGA,9*NA/20)
+  call dealiazing_spec(DGZ,DGZ,DGZ,9*NA/20)
+
+  call c2c_1m_x(DGA, plan_bck_x)
+  call c2c_1m_x(DGZ, plan_bck_x)
+  DGR = DGA*DGZ
+  call c2c_1m_x(DGR, plan_fwd_x)
+  call c2c_1m_x(DGA, plan_fwd_x)
+  if (nrank == 0) then
+     open(UNIT=900, FILE="Prod_09.dat")
+     open(UNIT=901, FILE="U_09.dat")
+     do i=is(1),ie(1)
+        write(900,"(e15.8)")REAL(DGR(i,is(2),is(3)))
+        write(901,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+     end do
+  end if
+
+
+  
+  CALL MPI_FINALIZE(ierr)
+  
+  stop
+
+  
+  do i = is(1),ie(1)!1, (Na+1)/2 +1
+     do j = is(2),ie(2)
+        do k = is(3),ie(3)
+           do it_time = 1,30
+              !    DGA(i,:,:) = ((33._DP - i)/31._DP)!*(1 - 5E-1) + 5E-1
+              !     DGA((NA+1)/2 + i,:,:) = ((NA+1)/2 + i - 34._DP)/31._DP !*(1 - 5E-1) + 5E-1
+              DGA(I,J,K) = DGA(I,J,K) + 1._DP/it_time * cos(it_time*(A(I,J,K))) !+ cos(it_time*(Z(I,J,K))) 
+           end do
+        end do
+     end do
+  end do
+  write(6,*)"U base = ",REAL(DGA(:,is(2),is(3)))
+  !DGA (1,:,:) = 1._DP
+!  DGA = CMPLX(0._DP,0._DP)
+!  DGA(23:44,:,:) = DGA(23:44,:,:)*4._DP
+
+  call c2c_1m_x(DGA, plan_bck_x)
+
+  UA = DGA
+  
+  if (nrank == 0) then
+!     write(6,*)"U base = ",REAL(DGA(:,is(2),is(3)))
+     open(UNIT=200, FILE="Phy_nndea.dat")
+     do i=is(1),ie(1)
+        write(200,"(e15.8)")REAL(DGA(i,is(2),is(3)))
+!        if (nrank == 0) write(6,*)i," ",DGA(i,is(2),is(3))
+     end do
+  end if
+
+  DG01 = DGA
+  
+  CALL DEALIAZING(DG01,DG02,DG03)
+  UZ = DG01
+  if (nrank == 0) then
+!     write(6,*)"U dea = ",DG01(:,is(2),is(3))
+     open(UNIT=201, FILE="Phy_dea.dat")
+     do i=is(1),ie(1)
+        write(201,"(e15.8)")REAL(DG01(i,is(2),is(3)))
+!        if (nrank == 0) write(6,*)i," ",DG01(i,is(2),is(3))
+     end do
+  end if
+
+
+  CALL COMPUTE_NON_LINEAR_TERMS(&
+       A, Z, R, OPA, OPZ, OPR, UA, UA, UA , NLAM1, NLZM1, NLRM1,&
+       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
+
+  CALL COMPUTE_NON_LINEAR_TERMS(&
+       A, Z, R, OPA, OPZ, OPR, UZ, UZ, UZ , NLA, NLZ, NLR,&
+       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
+
+  if (nrank == 0) then
+     open(UNIT=202, FILE="NL_base.dat")
+     do i=is(1),ie(1)
+        write(202,"(e15.8)")NLAM1(i,is(2),is(3))
+     end do
+  end if
+  if (nrank == 0) then
+     open(UNIT=203, FILE="NL_dea.dat")
+     do i=is(1),ie(1)
+        write(203,"(e15.8)")NLA(i,is(2),is(3))
+     end do
+  end if
+
+
+  
+
+  
+  CALL MPI_FINALIZE(ierr)
+  stop
+  
   ! === TEST 2 : avec troncature ===
   do i = 1, NA+1
      div_max = 2._DP * PI * real(i-1, DP) / real(NA+1, DP)
@@ -951,60 +1186,46 @@ contains
     close(id)
   end subroutine export_tecplot
 
-    subroutine dealiazing(ua,uz,ur)
-    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,UZ,UR
-    integer :: i
-    
+  subroutine dealiazing(ua,uz,ur)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,uz,ur
+    integer :: i,k_max,k_cut_p,k_cut_m
+
+    k_max = NA/3
+    k_cut_p = k_max +2
+    k_cut_m = NA - k_max + 1
+
 
     DGA = UA
-    DGZ = UZ
-    DGR = UR
 
+    call c2c_1m_x(DGA, plan_fwd_x)
+
+    DGA(k_cut_p : k_cut_m,:,:) = CMPLX(0._DP,0._DP)
+
+    if (nrank == 0)print*,"range : ",k_cut_p," : ", k_cut_m
     
-    call c2c_1m_x(DGA,plan_fwd_x)
-    call c2c_1m_x(DGZ,plan_fwd_x)
-    call c2c_1m_x(DGR,plan_fwd_x)
+    call c2c_1m_x(DGA, plan_bck_x)
 
-    DGA(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGA(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-    DGZ(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGZ(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-    DGR(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGR(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-
-    call c2c_1m_x(DGA,plan_bck_x)
-    call c2c_1m_x(DGZ,plan_bck_x)
-    call c2c_1m_x(DGR,plan_bck_x)
-
-    call transpose_x_to_y(DGA, DGA_Y)
-    call transpose_x_to_y(DGZ, DGZ_Y)
-    call transpose_x_to_y(DGR, DGR_Y)
-    
-    call c2c_1m_y(DGA_Y,plan_fwd_y)
-    call c2c_1m_y(DGZ_Y,plan_fwd_y)
-    call c2c_1m_y(DGR_Y,plan_fwd_y)
-
-    DGA(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGA(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
-    DGZ(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGZ(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
-    DGR(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGR(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
-    
-    call c2c_1m_y(DGA_Y,plan_bck_y)
-    call c2c_1m_y(DGZ_Y,plan_bck_y)
-    call c2c_1m_y(DGR_Y,plan_bck_y)
-
-    call transpose_y_to_x(DGA_Y, DGA)
-    call transpose_y_to_x(DGZ_Y, DGZ)
-    call transpose_y_to_x(DGR_Y, DGR)
-
-    UA = DGA
-    UZ = DGZ
-    UR = DGR
+    DG01 = DGA
     
     
   end subroutine dealiazing
+
+
+   subroutine dealiazing_spec(ua,uz,ur,k_max)
+    COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,uz,ur
+    integer :: i,k_max,k_cut_p,k_cut_m
+
+!    k_max = NA/3
+    k_cut_p = k_max +2
+    k_cut_m = NA - k_max + 1
+
+
+    UA(k_cut_p : k_cut_m,:,:) = CMPLX(0._DP,0._DP)
+
+    if (nrank == 0)print*,"K_max : ",k_max," range : ",k_cut_p," : ", k_cut_m
+    
+    
+  end subroutine dealiazing_spec
 
     
 end program tcheby_1d
