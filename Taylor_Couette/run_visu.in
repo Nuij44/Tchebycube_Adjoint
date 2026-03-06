@@ -1,12 +1,12 @@
 &parameters_cube
-na = 64 , 
-nz = 64 ,
+na = 192 , 
+nz = 48 ,
 nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
 z_min = 0.0 ,
 z_max = 1.0 ,  
-nb_cpu_y = 4 ,
+nb_cpu_y = 8 ,
 nb_cpu_z = 4
 /
 

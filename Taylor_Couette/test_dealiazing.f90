@@ -273,22 +273,74 @@ program tcheby_1d
 
   CALL RANDOM_SEED()
 
-  do i = 2, (NA+1)/2 +1
+  DGA = 0._DP
+  DGZ = 0._DP
+  DGR = 0._DP
+
+  DGA(1:(NA+1)/4 + 1,:,:) = 1._DP
+  DGA(3*(NA+1)/4:NA + 1,:,:) = 1._DP
+
+  DGZ(1:(NA+1)/4 + 1,:,:) = 1._DP
+  DGZ(3*(NA+1)/4:NA + 1,:,:) = 1._DP
+
+  DGR(1:(NA+1)/4 + 1,:,:) = 1._DP
+  DGR(3*(NA+1)/4:NA + 1,:,:) = 1._DP
+
+  call c2c_1m_x(DGA,plan_bck_x)
+  call c2c_1m_x(DGZ,plan_bck_x)
+  call c2c_1m_x(DGR,plan_bck_x)
+  
+  call transpose_x_to_y(DGA, DGA_Y)
+  call transpose_x_to_y(DGZ, DGZ_Y)
+  call transpose_x_to_y(DGR, DGR_Y)
+
+  call c2c_1m_y(DGA_Y,plan_fwd_y)
+  call c2c_1m_y(DGZ_Y,plan_fwd_y)
+  call c2c_1m_y(DGR_Y,plan_fwd_y)
+
+  DGA_Y(:,1:(NZ+1)/4 + 1,:) = 1._DP + DGA_Y(:,1:(NZ+1)/4 + 1,:)
+  DGA_Y(:,3*(NZ+1)/4:NZ + 1,:) = 1._DP + DGA_Y(:,3*(NZ+1)/4:NZ+1,:)
+
+  DGZ_Y(:,1:(NZ+1)/4 + 1,:) = 1._DP + DGZ_Y(:,1:(NZ+1)/4 + 1,:)
+  DGZ_Y(:,3*(NZ+1)/4:NZ + 1,:) = 1._DP + DGZ_Y(:,3*(NZ+1)/4:NZ+1,:)
+
+  DGR_Y(:,1:(NZ+1)/4 + 1,:) = 1._DP + DGR_Y(:,1:(NZ+1)/4 + 1,:)
+  DGR_Y(:,3*(NZ+1)/4:NZ + 1,:) = 1._DP + DGR_Y(:,3*(NZ+1)/4:NZ+1,:)
+  
+
+  call c2c_1m_y(DGA_Y,plan_bck_y)
+  call c2c_1m_y(DGZ_Y,plan_bck_y)
+  call c2c_1m_y(DGR_Y,plan_bck_y)
+
+  call transpose_y_to_x(DGA_y, DGA)
+  call transpose_y_to_x(DGZ_y, DGZ)
+  call transpose_y_to_x(DGR_y, DGR)
+
+  DG01 = DGA
+  DG02 = DGZ
+  DG03 = DGR
+  Pres = 0._DP
+  
+  call EXPORT_snapshot("init_192_48_64.h5",DG01,DG02,DG03,pres,PRES)
+
+  stop
+  
+  
+!  do i = 2, (NA+1)/2 +1
+  do i = 23,44
      CALL RANDOM_NUMBER(err)
      DG01(i,:,:) = err
-     DG01((NA+1)/2 +i ,:,:) = err
+!     DG01((NA+1)/2 +i ,:,:) = err
 
      CALL RANDOM_NUMBER(err)
      DG02(i,:,:) = err
-     DG02((NA+1)/2 +i ,:,:) = err
+ !    DG02((NA+1)/2 +i ,:,:) = err
   end do
 !     CALL Random_Number(DG01(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
 !     CALL Random_Number(DG02(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
 
-!  DG01 = 1._DP
-  DG02 = 1._DP
-  
-  
+
+    
   DGA = CMPLX(DG01,0._DP)
   DGZ = CMPLX(DG02,0._DP)
 

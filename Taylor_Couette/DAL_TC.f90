@@ -122,8 +122,6 @@ program tcheby_1d
      OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
   end if
 
-  print*,rank
-
   
   CALL MPI_BCAST( na      , 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
   CALL MPI_BCAST( nz      , 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
@@ -244,9 +242,9 @@ program tcheby_1d
   !Allocattion des tableaux pour sauver les iterations   
   if (do_adj) then
      if (memoire) then
-        ALLOCATE(SAVE_UA(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
-        ALLOCATE(SAVE_UZ(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
-        ALLOCATE(SAVE_UR(0:nb_iter/1,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
+        ALLOCATE(SAVE_UA(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
+        ALLOCATE(SAVE_UZ(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
+        ALLOCATE(SAVE_UR(0:nb_iter/2,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
   
         SAVE_UA(0,:,:,:) = UA(:,:,:)
         SAVE_UZ(0,:,:,:) = UZ(:,:,:)
@@ -265,6 +263,10 @@ program tcheby_1d
   
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
 
+  UAM1=UA
+  UZM1=UZ
+  URM1=UR
+  
   CALL dealiazing(ua,uz,ur)
   
   DG10 = UA + PRM_A*R + PRM_B/R
@@ -303,10 +305,6 @@ program tcheby_1d
   NLZM1 = NLZ
   NLRM1 = NLR
 
-  UAM1=UA
-  UZM1=UZ
-  URM1=UR
-
   SIGMA = 1._DP/DT
 
   CALL EQN_UA%SOLVE(UA, SA, SIGMA ,PH)
@@ -340,11 +338,11 @@ program tcheby_1d
      UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * DT 
   END FORALL
 
-  if (do_adj .AND. MOD(IT_TIME,1)==0) then
+  if (do_adj .AND. MOD(IT_TIME,2)==0) then
      if (memoire) then
-        SAVE_UA(it_time/1,:,:,:) = UA(:,:,:)
-        SAVE_UZ(it_time/1,:,:,:) = UZ(:,:,:)
-        SAVE_UR(it_time/1,:,:,:) = UR(:,:,:)
+        SAVE_UA(it_time/2,:,:,:) = UA(:,:,:)
+        SAVE_UZ(it_time/2,:,:,:) = UZ(:,:,:)
+        SAVE_UR(it_time/2,:,:,:) = UR(:,:,:)
      else
         write(num,'(I6.6)')it_time
         filename = trim(base_save)//num//'.h5'
@@ -395,6 +393,10 @@ program tcheby_1d
      SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
      SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
      SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
+     
+     UAM1=UA
+     UZM1=UZ
+     URM1=UR
 
      CALL dealiazing(ua,uz,ur)
      
@@ -427,10 +429,6 @@ program tcheby_1d
      NLAM1 = NLA
      NLZM1 = NLZ
      NLRM1 = NLR
-
-     UAM1=UA
-     UZM1=UZ
-     URM1=UR
 
      SIGMA = 1.5_DP/DT
 
@@ -492,11 +490,11 @@ program tcheby_1d
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
 
-     if (do_adj .AND. MOD(IT_TIME,1)==0) then
+     if (do_adj .AND. MOD(IT_TIME,2)==0) then
         if (memoire) then
-           SAVE_UA(it_time/1,:,:,:) = UA(:,:,:)
-           SAVE_UZ(it_time/1,:,:,:) = UZ(:,:,:)
-           SAVE_UR(it_time/1,:,:,:) = UR(:,:,:)
+           SAVE_UA(it_time/2,:,:,:) = UA(:,:,:)
+           SAVE_UZ(it_time/2,:,:,:) = UZ(:,:,:)
+           SAVE_UR(it_time/2,:,:,:) = UR(:,:,:)
         else
            write(num,'(I6.6)')it_time
            filename = trim(base_save)//num//'.h5'
@@ -575,15 +573,19 @@ program tcheby_1d
      
      PRES = 0._DP
      if (memoire) then
-        DG04(:,:,:) = SAVE_UA(nb_iter/1,:,:,:)
-        DG05(:,:,:) = SAVE_UZ(nb_iter/1,:,:,:)
-        DG06(:,:,:) = SAVE_UR(nb_iter/1,:,:,:)
+        DG04(:,:,:) = SAVE_UA(nb_iter/2,:,:,:)
+        DG05(:,:,:) = SAVE_UZ(nb_iter/2,:,:,:)
+        DG06(:,:,:) = SAVE_UR(nb_iter/2,:,:,:)
      else
         write(num,'(I6.6)')nb_iter
         filename = trim(base_save)//num//'.h5'
         CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06)
      end if
 
+     UAM1=UA
+     UZM1=UZ
+     URM1=UR
+     
      CALL dealiazing(ua,uz,ur)
      CALL dealiazing(DG04,DG05,DG06)
      
@@ -621,9 +623,9 @@ program tcheby_1d
 !           DG05 = SAVE_UZ(nb_iter-it_time+1,:,:,:)
 !           DG06 = SAVE_UR(nb_iter-it_time+1,:,:,:)
 
-           CALL INTERPOLATION(1,SAVE_UA(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG04)
-           CALL INTERPOLATION(1,SAVE_UZ(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG05)
-           CALL INTERPOLATION(1,SAVE_UR(FLOOR((nb_iter-it_time)/1._DP)+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/1._DP)+1,:,:,:), MOD(it_time+1,1), DG06)
+           CALL INTERPOLATION(2,SAVE_UA(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG04)
+           CALL INTERPOLATION(2,SAVE_UZ(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG05)
+           CALL INTERPOLATION(2,SAVE_UR(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG06)
         end if
         
         
@@ -634,6 +636,10 @@ program tcheby_1d
         SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
         SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
 
+        UAM1=UA
+        UZM1=UZ
+        URM1=UR
+        
         CALL dealiazing(ua,uz,ur)
         CALL dealiazing(DG04,DG05,DG06)
         
@@ -672,11 +678,7 @@ program tcheby_1d
         NLAM1 = NLA
         NLZM1 = NLZ
         NLRM1 = NLR
-        
-        UAM1=UA
-        UZM1=UZ
-        URM1=UR
-               
+                       
         SIGMA = 1.5_DP/DT
         
         CALL EQN_UA_AD%SOLVE(UA, SA, SIGMA ,PH)
@@ -1082,8 +1084,12 @@ contains
 
   subroutine dealiazing(ua,uz,ur)
     REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,UZ,UR
-    integer :: i
-    
+    integer :: i,k_max,k_cut_p,k_cut_m
+
+    k_max = NA/3
+    k_cut_p = k_max +2
+    k_cut_m = NA - k_max + 1
+
 
     DGA = UA
     DGZ = UZ
@@ -1094,31 +1100,26 @@ contains
     call c2c_1m_x(DGZ,plan_fwd_x)
     call c2c_1m_x(DGR,plan_fwd_x)
 
-    DGA(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGA(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-    DGZ(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGZ(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-    DGR(NA/3+2 : NA/2+1,   :, :) = 0._DP
-    DGR(NA/2+2 : NA-NA/3+1,:, :) = 0._DP
-
-    call c2c_1m_x(DGA,plan_bck_x)
-    call c2c_1m_x(DGZ,plan_bck_x)
-    call c2c_1m_x(DGR,plan_bck_x)
+    DGA(k_cut_p : k_cut_m,:,:) = CMPLX(0._DP,0._DP)
+    DGZ(k_cut_p : k_cut_m,:,:) = CMPLX(0._DP,0._DP)
+    DGR(k_cut_p : k_cut_m,:,:) = CMPLX(0._DP,0._DP)
 
     call transpose_x_to_y(DGA, DGA_Y)
     call transpose_x_to_y(DGZ, DGZ_Y)
     call transpose_x_to_y(DGR, DGR_Y)
+
+    k_max = NZ/3
+    k_cut_p = k_max +2
+    k_cut_m = NZ - k_max + 1
+
     
     call c2c_1m_y(DGA_Y,plan_fwd_y)
     call c2c_1m_y(DGZ_Y,plan_fwd_y)
     call c2c_1m_y(DGR_Y,plan_fwd_y)
 
-    DGA(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGA(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
-    DGZ(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGZ(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
-    DGR(:, NZ/3+2 : NZ/2+1,   :) = 0._DP
-    DGR(:, NZ/2+2 : NZ-NZ/3+1,:) = 0._DP
+    DGA_Y(:,k_cut_p : k_cut_m,:) = CMPLX(0._DP,0._DP)
+    DGZ_Y(:,k_cut_p : k_cut_m,:) = CMPLX(0._DP,0._DP)
+    DGR_Y(:,k_cut_p : k_cut_m,:) = CMPLX(0._DP,0._DP)
     
     call c2c_1m_y(DGA_Y,plan_bck_y)
     call c2c_1m_y(DGZ_Y,plan_bck_y)
@@ -1128,6 +1129,10 @@ contains
     call transpose_y_to_x(DGZ_Y, DGZ)
     call transpose_y_to_x(DGR_Y, DGR)
 
+    call c2c_1m_x(DGA,plan_bck_x)
+    call c2c_1m_x(DGZ,plan_bck_x)
+    call c2c_1m_x(DGR,plan_bck_x)
+    
     UA = DGA
     UZ = DGZ
     UR = DGR
