@@ -355,7 +355,7 @@ if __name__ == '__main__':
         #transposition des données pour avoir un ordre colonne major
         #data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
         
-        data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
+#        data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
     except: 
         print("The current directory is "+os.getcwd())
         print("%s is not inside this directory ?" % str_file) 
@@ -364,6 +364,8 @@ if __name__ == '__main__':
     
     data_dns_start=[init_ua, init_uz, init_ur]
     vector_begin=normalization(data_dns_start, options.E0, prod)
+
+    x0 = [np.reshape(vector_begin[0], (N[0],N[1],N[2])),np.reshape(vector_begin[1], (N[0],N[1],N[2])),np.reshape(vector_begin[2], (N[0],N[1],N[2]))]
     
     prod_value_start=prod(vector_begin,vector_begin)
     if (options.verbose) : print('Starting value of the scalar product='+str(prod_value_start))
@@ -378,7 +380,7 @@ if __name__ == '__main__':
                   err_tol=options.tol, alpha_k =options.alpha, LS = options.LS, CG = ConjGrad)
 
     else:
-        data_opt = lib_optimize.optimize_rotation(fun_tchebycube, vector_begin, jac_tchebycube, prod, 1, **dict_options)
+        data_opt = lib_optimize.optimize_rotation(fun_tchebycube, x0, jac_tchebycube, prod, 1, **dict_options)
 
     print(data_opt)
 
