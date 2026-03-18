@@ -443,7 +443,7 @@ program tcheby_1d
         stop
      end if
 
-!     if (mod(it_time,10000)==1) then
+     if (mod(it_time,1000)==1) then
         filename = trim(base_snap)//'grid.h5'
         call update_id_and_time(trim(filename),snap_dt,snap_id)
         WRITE(num,'(I6.6)')snap_id
@@ -455,7 +455,7 @@ program tcheby_1d
         filename = trim(vort_snap)//num//'.h5'
         call EXPORT_snapshot(trim(FILENAME),DG01,DG02,DG03,pres,PRES)
 
- !    end if
+     end if
 
      if (mod(it_time,1000)==1) then
         CALL AZIMUT_MOD(UA,UZ,UR,SP_A,NA/2)

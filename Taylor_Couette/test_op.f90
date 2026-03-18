@@ -7,7 +7,7 @@ program tcheby_1d
   use m_adjoint_tool_cyl
   use m_fourier_transform
   use m_tensor_product
-
+  use m_udf_mms
   use m_hdf5_ifce
   use mpi
   use decomp_2d
@@ -93,8 +93,8 @@ program tcheby_1d
   
   REAL(KIND=8),DIMENSION(3) :: NU_MOMENTUM
   REAL(KIND=8),DIMENSION(3) :: NU_ENERGY
-  REAL(KIND=8),DIMENSION(3) :: NU_POISSON
-  REAL(kind=8) :: sigma,omega_tilde,noise,res,alpha,beta,vol
+  REAL(KIND=8),DIMENSION(3) :: NU_POISSON,err_mms
+  REAL(kind=8) :: sigma,omega_tilde,noise,res,alpha,beta,vol,err_grad,err_lap,err_nl
   
   REAL(DP),DIMENSION(:,:,:,:),ALLOCATABLE :: SAVE_UA,SAVE_UZ,SAVE_UR
 
@@ -217,7 +217,7 @@ program tcheby_1d
   dirichl =  [1._DP,0._DP]
   neumann =  [0._DP,1._DP]
 
-  NU = RE**(-1)
+  NU = 1. !RE**(-1)
   
   NU_MOMENTUM = -  nu*[1,1,1]!*0.5
   NU_POISSON  =  1.
@@ -245,67 +245,225 @@ program tcheby_1d
   
   call preproc()
 
-  DG01 = R!1._DP
 
+  TC = 0._DP
+
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UA(I,J,K) = udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UZ(I,J,K) = udf_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UR(I,J,K) = udf_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+  END FORALL
+
+
+!  print*,"nrank:",nrank,ur(ph%xst(1),:,ph%xst(3))
+  
+  CALL GRAD(A, Z, R, OPA, OPZ, OPR, UA, DG01, DG02, DG03)
+
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG04(I,J,K) = ABS( DG01(I,J,K) - udf_grada_a(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG05(I,J,K) = ABS( DG02(I,J,K) - udf_grada_z(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG06(I,J,K) = ABS( DG03(I,J,K) - udf_grada_r(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+  END FORALL
+
+  if (nrank == 0) print*,"Vérif Grad"
+  
+  err_grad = MAXVAL(DG04)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ua)_a : ",err_grad
+
+  err_grad = MAXVAL(DG05)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ua)_z : ",err_grad
+
+  err_grad = MAXVAL(DG06)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ua)_r : ",err_grad
+
+  CALL GRAD(A, Z, R, OPA, OPZ, OPR, UZ, DG01, DG02, DG03)
+    
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG04(I,J,K) = ABS( DG01(I,J,K) - udf_gradz_a(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG05(I,J,K) = ABS( DG02(I,J,K) - udf_gradz_z(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG06(I,J,K) = ABS( DG03(I,J,K) - udf_gradz_r(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+  END FORALL
 
   
-  call integrate_volume(DG01,A_tot,Z_tot,R_tot,vol)
+  err_grad = MAXVAL(DG04)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Uz)_a : ",err_grad
 
-  print*,'rang : ',nrank,' Volume : ',vol,vol/pi
+  err_grad = MAXVAL(DG05)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Uz)_z : ",err_grad
 
-!  if (nrank==0) print*,A_tot(:,1,1)
-  !if (nrank==0) print*,Z_tot(1,:,1)
- ! if (nrank==0) print*,R_tot(1,1,:)
-  
-  
-   UA = UA_0
-   UZ = UZ_0
-   UR = UR_0
-  
-  !Allocattion des tableaux pour sauver les iterations   
-   if (memoire) then
-      ALLOCATE(SAVE_UA(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
-      ALLOCATE(SAVE_UZ(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
-      ALLOCATE(SAVE_UR(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
-      
-      SAVE_UA(0,:,:,:) = UA(:,:,:)
-      SAVE_UZ(0,:,:,:) = UZ(:,:,:)
-      SAVE_UR(0,:,:,:) = UR(:,:,:)
-   else
-      write(num,'(I6.6)')0
-      filename = trim(base_save)//num//'.h5'
-      call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
-   end if
+  err_grad = MAXVAL(DG06)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Uz)_r : ",err_grad
 
-  SA = UA/DT
-  SZ = UZ/DT
-  SR = UR/DT
+    CALL GRAD(A, Z, R, OPA, OPZ, OPR, UR, DG01, DG02, DG03)
+
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG04(I,J,K) = ABS( DG01(I,J,K) - udf_gradr_a(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG05(I,J,K) = ABS( DG02(I,J,K) - udf_gradr_z(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG06(I,J,K) = ABS( DG03(I,J,K) - udf_gradr_r(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+  END FORALL
+
+  err_grad = MAXVAL(DG04)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ur)_a : ",err_grad
+
+  err_grad = MAXVAL(DG05)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ur)_z : ",err_grad
+
+  err_grad = MAXVAL(DG06)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error Grad(Ur)_r : ",err_grad
+
+
+  if (nrank == 0) print*,"Vérif NL"
+  
+  CALL COMPUTE_NON_LINEAR_TERMS(&
+       A, Z, R, OPA, OPZ, OPR, UA, UZ, UR , NLA, NLZ, NLR,&
+       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
+
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG04(I,J,K) = ABS( NLA(I,J,K) - udf_NLa(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG05(I,J,K) = ABS( NLZ(I,J,K) - udf_NLz(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     DG06(I,J,K) = ABS( NLR(I,J,K) - udf_NLr(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+  END FORALL
+
+  err_nl = MAXVAL(DG04)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error NL(U)_a : ",err_nl
+
+  err_nl = MAXVAL(DG05)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error NL(U)_z : ",err_nl
+
+  err_nl = MAXVAL(DG06)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error NL(U)_r : ",err_nl
+  
+
+  
+  if (nrank == 0) print*,"Vérif lap(U) = S"
+
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG01(I,J,K) = udf_st_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) - udf_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K))/(R(I,J,K)**2)
+     FI(I,J,K)   = udf_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+  END FORALL
+
+  CALL EQN_UA%SOLVE(DG04,DG01,0._DP,PH)
+
+  DG07 = ABS( DG04 - FI )
+  
+  err_nl = MAXVAL(DG07)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error PB Laplacian : ",err_nl
+
+
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG01(I,J,K) = (R(I,J,K))! - 1.) * (R(I,J,K) - 3. )*R(I,J,K)
+  end FORALL
+
+!  CALL get_quadrature_hhi(quad,DG01,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+!  Vol = DG02(PH%XST(1),PH%XST(2),PH%XST(3))
+  !call integrate_volume(DG01,A_tot,Z_tot,R_tot,vol)
+
+  CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
+  
+  if (nrank == 0)print*,' Volume : ',vol,vol/pi
+
+
+  TC = 0._DP
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UA(I,J,K) = udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UZ(I,J,K) = udf_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UR(I,J,K) = udf_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+
+     SA(I,J,K) = udf_scm_ua(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+     SZ(I,J,K) = udf_scm_uz(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+     SR(I,J,K) = udf_scm_ur(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+  END FORALL
+  
+  CALL COMPUTE_NON_LINEAR_TERMS(&
+       A, Z, R, OPA, OPZ, OPR, UA, UZ, UR , NLA, NLZ, NLR,&
+       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
+
+  CALL OPA%D1(UA,SFI)
+  DG01 = NU*(-2._DP/R**2)*SFI
+  CALL OPA%D1(UR,SFI)
+  DG02 = NU*(+2._DP/R**2)*SFI
+
+  
+  SA = SA - NLA + DG02
+  SZ = SZ - NLZ 
+  SR = SR - NLR + DG01
+
+
+  SIGMA = 0._DP
+
+  CALL EQN_UA%SOLVE(DG01, SA, SIGMA ,PH)
+  CALL EQN_UZ%SOLVE(DG02, SZ, SIGMA ,PH)
+  CALL EQN_UR%SOLVE(DG03, SR, SIGMA ,PH)
+
+  DG04 = ABS( DG01 - UA )
+  DG05 = ABS( DG02 - UZ )
+  DG06 = ABS( DG03 - UR )
+
+  err_nl = MAXVAL(DG04)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error PB stationnaire azimutal : ",err_nl
+
+  err_nl = MAXVAL(DG05)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error PB stationnaire vertical : ",err_nl
+
+  err_nl = MAXVAL(DG06)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
+  if (nrank==0)print*,"Error PB stationnaire radial : ",err_nl
+
+  
+!  CALL MPI_FINALIZE(ierr)
+
+!  STOP
+
+  TC = 0._DP
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     UA(I,J,K) = udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UZ(I,J,K) = udf_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+     UR(I,J,K) = udf_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
+
+     SA(I,J,K) = udf_scm_ua(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+     SZ(I,J,K) = udf_scm_uz(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+     SR(I,J,K) = udf_scm_ur(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
+  END FORALL
+  
+  SA = SA + UA/DT
+  SZ = SZ + UZ/DT
+  SR = SR + UR/DT
 
   
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
-
+  
   UAM1=UA
   UZM1=UZ
   URM1=UR
   
-  CALL dealiazing(ua,uz,ur)
-  
-  DG10 = UA + PRM_A*R + PRM_B/R
+ ! CALL dealiazing(ua,uz,ur)
   
   CALL COMPUTE_NON_LINEAR_TERMS(&
-       A, Z, R, OPA, OPZ, OPR, DG10, UZ, UR , NLAM1, NLZM1, NLRM1,&
+       A, Z, R, OPA, OPZ, OPR, UA, UZ, UR , NLA, NLZ, NLR,&
        DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-  DG10 = PRM_A*R + PRM_B/R
-  DG14 = 0._DP
-  
-  CALL COMPUTE_NON_LINEAR_TERMS(&
-       A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
-       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-  NLA = NLAM1 - DG11
-  NLZ = NLZM1 - DG12
-  NLR = NLRM1 - DG13
 
   TC = dt
 
@@ -359,37 +517,6 @@ program tcheby_1d
      UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * DT 
   END FORALL
 
-  if ( MOD(IT_TIME,inter_order)==0) then
-     if (memoire) then
-        SAVE_UA(it_time/inter_order,:,:,:) = UA(:,:,:)
-        SAVE_UZ(it_time/inter_order,:,:,:) = UZ(:,:,:)
-        SAVE_UR(it_time/inter_order,:,:,:) = UR(:,:,:)
-     else
-        write(num,'(I6.6)')it_time
-        filename = trim(base_save)//num//'.h5'
-        call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
-     end if
-  end if
-
-  
-  !Calcul de J(u) = int_domaine <u,u> + <t,t>
-  DG04 = UA*UA*R
-  DG05 = UZ*UZ*R
-  DG06 = UR*UR*R
-
-!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-
-  call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-  J_U = VOL*DT
-  call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
-  J_U = VOL*DT + J_U
-  call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
-  J_U = VOL*DT + J_U
-!  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT
-
-  
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
   is = get_is()
@@ -400,12 +527,29 @@ program tcheby_1d
   endtime   = MPI_Wtime();
   endtime =  endtime-starttime
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
+
+  DG01=0._DP
+  DG02=0._DP
+  DG03=0._DP
+  is = get_is_b([0,0,0])
+  ie = get_ie_b([0,0,0])
+  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+     DG01(I,J,K) = ABS( UA(I,J,K) - udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+     DG02(I,J,K) = ABS( UZ(I,J,K) - udf_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+     DG03(I,J,K) = ABS( UR(I,J,K) - udf_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+  END FORALL
+
+  ERR_MMS(1) = MAXVAL(DG01)
+  ERR_MMS(2) = MAXVAL(DG02)
+  ERR_MMS(3) = MAXVAL(DG03)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,ERR_MMS,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
   
   call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
   it_time = 1
-  if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
-  
+  if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms
+
+!  CALL MPI_FINALIZE(ierr)
+!  STOP
     
   DO IT_time=2,nb_iter
      
@@ -413,31 +557,31 @@ program tcheby_1d
      snap_dt = snap_dt + dt
      
      starttime = MPI_Wtime();
-        
+
+     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+        SA(I,J,K) = udf_scm_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K),1._DP)
+        SZ(I,J,K) = udf_scm_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K),1._DP)
+        SR(I,J,K) = udf_scm_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K),1._DP)
+     END FORALL
+
+     
+     
      CALL GRAD( A,Z,R, &
           OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
+     SA = SA + (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
+     SZ = SZ + (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
+     SR = SR + (2._DP*UR-0.5_DP*URM1)/DT - DG03
      
      UAM1=UA
      UZM1=UZ
      URM1=UR
 
-     CALL dealiazing(ua,uz,ur)
+!     CALL dealiazing(ua,uz,ur)
      
-     DG10 = UA + PRM_A*R + PRM_B/R
-
+ 
      CALL COMPUTE_NON_LINEAR_TERMS(&
-          A, Z, R, OPA, OPZ, OPR, DG10, UZ, UR, NLA, NLZ, NLR,&
-          DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-     DG10 = PRM_A*R + PRM_B/R
-     DG14 = 0._DP
-  
-     CALL COMPUTE_NON_LINEAR_TERMS(&
-          A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
+          A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, NLA, NLZ, NLR,&
           DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
 
      CALL OPA%D1(UA,SFI)
@@ -445,9 +589,9 @@ program tcheby_1d
      CALL OPA%D1(UR,SFI)
      DG02 = NU*(+2._DP/R**2)*SFI
 
-     NLR = NLR - DG01 - DG13
-     NLA = NLA - DG02 - DG11
-     NLZ = NLZ - DG12
+     NLR = NLR - DG01 
+     NLA = NLA - DG02 
+     NLZ = NLZ 
      
      SA = SA - 2._DP*NLA + NLAM1 
      SZ = SZ - 2._DP*NLZ + NLZM1 
@@ -501,43 +645,25 @@ program tcheby_1d
      endtime   = MPI_Wtime();
      endtime =  endtime-starttime
      CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-     !Calcul de J(u) = int_domaine <u,u> + <t,t>
-     DG04 = UA*UA*R
-     DG05 = UZ*UZ*R
-     DG06 = UR*UR*R
 
-!     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     DG01=0._DP
+     DG02=0._DP
+     DG03=0._DP
+     is = get_is_b([0,0,0])
+     ie = get_ie_b([0,0,0])
+     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+        DG01(I,J,K) = ABS( UA(I,J,K) - udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+        DG02(I,J,K) = ABS( UZ(I,J,K) - udf_uz(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+        DG03(I,J,K) = ABS( UR(I,J,K) - udf_ur(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) )
+     END FORALL
      
-!     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT + J_U
-
-     
-     call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-     J_U = VOL*DT + J_U
-     call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
-     J_U = VOL*DT + J_U
-     call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
-     J_U = VOL*DT + J_U
-     
+     ERR_MMS(1) = MAXVAL(DG01)
+     ERR_MMS(2) = MAXVAL(DG02)
+     ERR_MMS(3) = MAXVAL(DG03)
+     CALL MPI_ALLREDUCE(MPI_IN_PLACE,ERR_MMS,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+       
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
-
-     if ( MOD(IT_TIME,inter_order)==0) then
-        if (memoire) then
-           SAVE_UA(it_time/inter_order,:,:,:) = UA(:,:,:)
-           SAVE_UZ(it_time/inter_order,:,:,:) = UZ(:,:,:)
-           SAVE_UR(it_time/inter_order,:,:,:) = UR(:,:,:)
-        else
-           write(num,'(I6.6)')it_time
-           filename = trim(base_save)//num//'.h5'
-           call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
-        end if
-     end if
-
-     if (nrank==0) write(42,*)dt,J_U
-
+     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms
 
      if (cfl .GT. 10.) then
         if (rank == 0) print'("CFL TOO BIG.")'
@@ -549,6 +675,10 @@ program tcheby_1d
      
   end DO
 
+  CALL MPI_FINALIZE(ierr)
+  STOP
+
+  
   CALL DUMP_HDF5_BASIC(file_dump,'WRITE',TC,DT,msh,UA,UZ,UR,Pres,DG01,dg09)
   
   UA_T = UA

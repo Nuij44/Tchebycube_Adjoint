@@ -34,7 +34,7 @@ include_directories(${HDF5_INCLUDE_DIRS})
 # Add subdirectory for Tcheb3 library if applicable
 add_subdirectory(${SRC_DIR} ${BIN_DIR})
 
-#set(COMMON_SOURCE_FILES m_udf_mms.f90)
+set(COMMON_SOURCE_FILES m_udf_mms.f90)
 
 set(EXECUTABLES
   DAL_TC.x:DAL_TC.f90
@@ -42,6 +42,7 @@ set(EXECUTABLES
   lin_visu_TC.x:lin_visu_TC.f90
   test_dealiazing.x:test_dealiazing.f90
   test_grad.x:test_grad.f90
+  test_op.x:test_op.f90	
 )
 
 # Add source file paths

@@ -2,11 +2,12 @@ module m_quadrature
   use decomp_2d
   use m_numerics
   use mpi
+  use m_fourier_transform
   implicit none
   type t_quadrature
      real(kind=8)::xmin(3),xmax(3)
-     real(kind=8),allocatable::quad_x(:),quad_y(:),quad_z(:)
-     
+     real(kind=8),allocatable::quad_x(:),quad_y(:),quad_z(:),mean(:),cheb_coeffs(:)
+     integer :: rank
   end type t_quadrature
   
 contains
@@ -24,6 +25,13 @@ contains
     integer :: zst(3),zen(3),nz
 
     integer :: i,j,k
+    REAL(KIND=8),ALLOCATABLE,DIMENSION(:) :: mean,cheb_coeffs
+
+    call mpi_comm_rank(mpi_comm_world,this%rank,i)
+    
+    
+    ALLOCATE(this%mean(1:nz+1),this%cheb_coeffs(1:Nz+1))
+
 
     ALLOCATE(THIS%QUAD_X(XST(1):XEN(1)))
     ALLOCATE(THIS%QUAD_Y(YST(2):YEN(2)))
@@ -61,9 +69,9 @@ contains
     END DO
     
 
-    THIS%QUAD_X = THIS%QUAD_X/(XMAX(1)-XMIN(1))
-    THIS%QUAD_Y = THIS%QUAD_Y/(XMAX(2)-XMIN(2))
-    THIS%QUAD_Z = THIS%QUAD_Z/(XMAX(3)-XMIN(3))
+!    THIS%QUAD_X = THIS%QUAD_X/(XMAX(1)-XMIN(1))
+!    THIS%QUAD_Y = THIS%QUAD_Y/(XMAX(2)-XMIN(2))
+!    THIS%QUAD_Z = THIS%QUAD_Z/(XMAX(3)-XMIN(3))
 
     
   end subroutine INIT_quadrature_hhi
@@ -80,6 +88,7 @@ contains
     integer :: zst(3),zen(3),nz
     real(kind=8) :: tmp
     integer ::i,j,k 
+
     
     forall(j=xst(2):xen(2),k=xst(3):xen(3))
        DG1_X(1,J,K) = SUM(FI(1:NX+1,j,k)*THIS%QUAD_X(1:NX+1))
@@ -133,4 +142,86 @@ contains
   END subroutine normalize
   
 
+  subroutine integrate_spec(this,UA,VOL,PH,NA,NZ,NR,xmax,xmin)
+    type(t_quadrature) :: this
+    real(kind=8),allocatable,intent(in) ::UA(:,:,:)
+    real(kind=8) :: vol
+    integer :: na,nz,nr
+    REAL(kind=8),dimension(3) :: xmax,xmin
+    integer :: i,j,k,n,rank_mode0
+    type(decomp_info) :: ph
+    REAL(kind=8) :: weight,integral_z,LX,LY,LZ
+    integer :: ierr
+    
+    DG_x = UA
+    call c2c_1m_x(dg_x,plan_fwd_x)
+    zg_X = 0._DP
+    zg_X(1,:,:) = DG_X(1,:,:)
+    
+    CALL TRANSPOSE_X_TO_Y(zg_X,zg1_Y)
+    call c2c_1m_y(zg1_y,plan_fwd_y)
+    zg2_Y = 0._DP
+    zg2_Y(:,1,:) = zg1_Y(:,1,:)
+
+    CALL TRANSPOSE_Y_TO_Z(zg2_Y,zg1_Z)
+    
+    !Recherche du rang du processus possedant zg1_Z(1,1,:)
+
+    rank_mode0 = 0
+
+    if (PH%ZST(1)==1 .AND. PH%ZST(2)==1) then
+       rank_mode0 = this%rank
+       this%mean(1:nr+1) = zg1_Z(1,1,1:NR+1)/sqrt(dble((na+1)*(nz+1)))
+    end if
+
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,rank_mode0,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,IERR)
+
+    call MPI_Bcast(this%mean, nr+1, MPI_DOUBLE_PRECISION,rank_mode0,MPI_COMM_WORLD,ierr)
+
+    ! ----------------------------------------------------
+    ! Etape 2 : Coefficients de Tchebychev de mean(r)
+    !           via DCT-II (formule directe)
+    ! ----------------------------------------------------
+
+    do n = 0, NR
+       this%cheb_coeffs(n+1) = 0.0d0
+       do k = 1, NR+1
+          this%cheb_coeffs(n+1) = this%cheb_coeffs(n+1) + this%mean(k) * cos(PI * dble(n) * dble(k-1) / dble(NR))  ! ← dble(NR) correct
+       end do
+       this%cheb_coeffs(n+1) = this%cheb_coeffs(n+1) * 2.0d0 / dble(NR)  ! ← dble(NR) correct
+    end do
+
+    ! Correction du mode 0
+    this%cheb_coeffs(1) = this%cheb_coeffs(1) * 0.5d0
+    this%cheb_coeffs(NR+1) = this%cheb_coeffs(NR+1) * 0.5d0
+
+  ! ----------------------------------------------------------------
+  ! Etape 3 : Intégration Tchebychev
+  !           ∫_{-1}^{1} T_n(ξ) dξ = 2/(1-n²)  si n pair, 0 sinon
+  ! ----------------------------------------------------------------
+  LZ = 0.5d0 * (xmax(3) - xmin(3))    ! jacobien dξ → dz
+
+  integral_z = 0.0d0
+  do n = 0, Nr
+    if (mod(n,2) == 0) then     ! modes pairs uniquement
+      if (n == 0) then
+        weight = 2.0d0          ! ∫T_0 dξ = 2
+      else
+        weight = 2.0d0 / (1.0d0 - dble(n*n))
+      end if
+      integral_z = integral_z + this%cheb_coeffs(n+1) * weight
+    end if
+  end do
+
+  ! ----------------------------------------------------------------
+  ! Etape 4 : Assemblage final
+  !           I = Lx * Ly * Lz * ∫ mean_xy(ξ) dξ
+  ! ----------------------------------------------------------------
+  Lx = xmax(1) - xmin(1)
+  LY = xmax(2) - xmin(2)
+  
+  vol = Lx * Ly * Lz * integral_z
+    
+  end subroutine integrate_spec
+  
 end module m_quadrature

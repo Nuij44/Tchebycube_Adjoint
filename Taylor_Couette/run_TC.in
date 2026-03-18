@@ -1,6 +1,6 @@
 &parameters_cube
 na = 192 , 
-nz = 48 ,
+nz = 64 ,
 nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
@@ -18,7 +18,7 @@ RE = 3000 ,
 
 &parameters_timescheme
 tmax = 30 ,
-dt = 1e-4 ,
+dt = 1.5e-4 ,
 root_dir = 'data_fun/'
 resume = F,
 /

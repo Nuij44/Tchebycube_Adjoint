@@ -52,11 +52,11 @@ program tcheby_1d
   real(kind=8),allocatable ,dimension(:,:,:) ::  UA,UZ,UR,PRES,FI
   real(kind=8),allocatable ,dimension(:,:,:) ::  SA,SZ,SR,SFI
   real(kind=8),allocatable ,dimension(:,:,:) ::  NLA,NLZ,NLR
-  real(kind=8),allocatable ,dimension(:,:,:) ::  A,Z,R
+  real(kind=8),allocatable ,dimension(:,:,:) ::  A,Z,R,A_tot,Z_tot,R_tot
   real(kind=8) :: w2,t1,h
   integer :: it_time,is(3),ie(3)
   integer , parameter :: OX=1,OY=2,OZ=3
-  REAL(DP) :: prm_A,prm_B,eta,OMEGA_i,OMEGA_o
+  REAL(DP) :: prm_A,prm_B,eta,OMEGA_i,OMEGA_o,integ
   
   ! attention au type à lire
   REAL(kind=8) :: a_min,a_max,z_min,z_max,r_min,r_max
@@ -238,6 +238,21 @@ program tcheby_1d
 
   !Lecture de la condition initiale
   CALL IMPORT_HDF5_INIT(TRIM(init_file),UA,UZ,UR)
+
+!  CALL NORMALIZATION(UA,UZ,UR,1E-4)
+
+  DG04 = UA*UA*R
+  DG05 = UZ*UZ*R
+  DG06 = UR*UR*R
+
+  CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
+  CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
+  J_U = integ + J_U
+  CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
+  J_U = integ + J_U
+  
+  if (nrank == 0)write(6,*)"E0 : ",J_U
+  
   
   !Allocattion des tableaux pour sauver les iterations   
   if (do_adj) then
@@ -356,11 +371,23 @@ program tcheby_1d
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
-  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+  CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
+  CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
+  J_U = integ + J_U
+  CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
+  J_U = integ + J_U
   
-  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
+!  call integrate_volume(DG04,A_tot,Z_tot,R_tot,integ)
+!  J_U = integ
+!  call integrate_volume(DG05,A_tot,Z_tot,R_tot,integ)
+!  J_U = integ + J_U
+!  call integrate_volume(DG06,A_tot,Z_tot,R_tot,integ)
+!  J_U = integ +J_U
+!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+  
+!  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
   
   ! check divergence 
@@ -480,12 +507,27 @@ program tcheby_1d
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
 
-     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
 
+     CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
+     CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
+     J_U = integ + J_U
+     CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
+     J_U = integ + J_U
+
+     
+     !  call integrate_volume(DG04,A_tot,Z_tot,R_tot,integ)
+     !  J_U = integ + J_U
+     !  call integrate_volume(DG05,A_tot,Z_tot,R_tot,integ)
+     !  J_U = integ + J_U
+     !  call integrate_volume(DG06,A_tot,Z_tot,R_tot,integ)
+     !  J_U = integ + J_U
+     
+     !     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     !     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     !     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     
+     !     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
+     
      
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
@@ -963,7 +1005,7 @@ contains
     call alloc_x(UR   , OPT_GLOBAL=.TRUE.) ; UR = 0
     call alloc_x(SR  , OPT_GLOBAL=.TRUE.) ; SR = 0
     call alloc_x(NLR , OPT_GLOBAL=.TRUE.) ; NLR = 0
-    
+  
     call alloc_x(A  , OPT_GLOBAL=.TRUE.) ; A = 0
     call alloc_x(Z  , OPT_GLOBAL=.TRUE.) ; Z = 0
     call alloc_x(R  , OPT_GLOBAL=.TRUE.) ; R = 0
@@ -975,6 +1017,12 @@ contains
     call alloc_x(NLAM1  , OPT_GLOBAL=.TRUE.) ; NLAM1 = 0._DP
     call alloc_x(NLZM1  , OPT_GLOBAL=.TRUE.) ; NLZM1 = 0._DP
     call alloc_x(NLRM1  , OPT_GLOBAL=.TRUE.) ; NLRM1 = 0._DP
+
+    ALLOCATE(A_tot(1:NA+1,1:NZ+1,1:NR+1))
+    ALLOCATE(Z_tot(1:NA+1,1:NZ+1,1:NR+1))
+    ALLOCATE(R_tot(1:NA+1,1:NZ+1,1:NR+1))
+
+
     
     FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
        A(I,J,K) = MSH(1)%X(I)
@@ -982,6 +1030,13 @@ contains
        R(I,J,K) = MSH(3)%X(K)
     END FORALL
 
+    FORALL(I=1:NA+1,J=1:NZ+1,K=1:NR+1)
+       A_tot(i,j,k) = MSH(1)%X(I)
+       Z_tot(i,j,k) = MSH(2)%X(J)
+       R_tot(i,j,k) = MSH(3)%X(K)
+    END FORALL
+
+    
   end subroutine preproc
 
   subroutine source_term(A,Z,R,PRES,nu,prm_K,F_A,F_Z,F_R)
@@ -1140,5 +1195,21 @@ contains
     
   end subroutine dealiazing
 
+  subroutine NORMALIZATION(UA,UZ,UR,E0)
+    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: UA,UZ,UR
+    REAL(DP) :: E0, NRJ, vol
+
+    DG01 = UA * UA * R
+    CALL integrate_spec(quad,DG01,NRJ,PH,NA,NZ,NR,xmax,xmin)
+    DG01 = UZ * UZ * R
+    CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
+    NRJ = NRJ + VOL
+    DG01 = UR * UR * R
+    CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
+    NRJ = NRJ + VOL  
+    UA = E0 * UA / NRJ
+    UZ = E0 * UZ / NRJ
+    UR = E0 * UR / NRJ
+  end subroutine NORMALIZATION
   
 end program tcheby_1d
