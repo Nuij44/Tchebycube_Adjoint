@@ -24,7 +24,7 @@ nr0 = 2 ,
 
 &parameters_timescheme
 tmax = 1 ,
-dt = 5e-4 ,
+dt = 1e-3 ,
 root_dir = 'outdir/'
 resume = F,
 /

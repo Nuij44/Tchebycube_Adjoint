@@ -1,6 +1,6 @@
 &parameters_cube
 na = 192 , 
-nz = 48 ,
+nz = 64 ,
 nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
@@ -12,7 +12,7 @@ nb_cpu_z = 8
 
 
 &parameters_physical
-RE = 10000 ,
+RE = 3000 ,
 /
 
 &parameters_initial_condition
@@ -31,7 +31,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = 'Data/1Z_RE_3000/cond_init/init_11.h5'
+init_file = 'cond_init/init_28.h5'
 /
 
 

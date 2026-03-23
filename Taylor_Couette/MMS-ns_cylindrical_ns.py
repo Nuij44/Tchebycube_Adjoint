@@ -117,8 +117,8 @@ ri,ro,H= 1, 3 , 2*pi
 d = ro-ri
 
 # velocity field used by isa to check the accuracy in 3d
-ur = 0.*((r-1)*(r-3))#**2*sin(theta)*sin(2.*pi*z) #+1/(2*pi  )*sin(  pi*(r-ri)/d)**2*cos(theta)*sin(2*pi*z/H)*(1+sin(2*pi*t))
-ua = 10.*cos(4.*pi*t)*sin(2.*pi*z)*((r-1)*(r-3))**2*sin(theta)#-1/(2*pi  )*sin(  pi*(r-ri)/d)**2*sin(theta)*sin(2*pi*z/H)*(1+sin(2*pi*t))
+ur = ((r-1)*(r-3))**2*sin(theta)*sin(2.*pi*z) #+1/(2*pi  )*sin(  pi*(r-ri)/d)**2*cos(theta)*sin(2*pi*z/H)*(1+sin(2*pi*t))
+ua = sin(2.*pi*z)*((r-1)*(r-3))**2*sin(theta)#-1/(2*pi  )*sin(  pi*(r-ri)/d)**2*sin(theta)*sin(2*pi*z/H)*(1+sin(2*pi*t))
 div_h = (1/r) * diff(r * ur, r) + (1/r) * diff(ua, theta) 
 uz = ((r-1)*(r-3))**2*sin(theta)*sin(4.*pi*z)*0. + integrate(-div_h, z)
 p = 0.#( cos( pi*(r-ri)/d ) + cos(2*pi*z/H ) )*sin(theta)#*(1+sin(2*pi*t))

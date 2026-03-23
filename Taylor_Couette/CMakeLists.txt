@@ -42,7 +42,8 @@ set(EXECUTABLES
   lin_visu_TC.x:lin_visu_TC.f90
   test_dealiazing.x:test_dealiazing.f90
   test_grad.x:test_grad.f90
-  test_op.x:test_op.f90	
+  test_op.x:test_op.f90
+  prod.x:prod.f90
 )
 
 # Add source file paths

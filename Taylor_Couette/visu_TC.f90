@@ -55,7 +55,7 @@ program tcheby_1d
   real(kind=8) :: w2,t1,h
   integer :: it_time,is(3),ie(3)
   integer , parameter :: OX=1,OY=2,OZ=3
-  REAL(DP) :: prm_A,prm_B,eta,OMEGA_i,OMEGA_o
+  REAL(DP) :: prm_A,prm_B,eta,OMEGA_i,OMEGA_o,integ_a,integ_z,integ_r
   
   ! attention au type à lire
   REAL(kind=8) :: a_min,a_max,z_min,z_max,r_min,r_max
@@ -264,7 +264,7 @@ program tcheby_1d
   UZ = DG02
   UR = DG03
 
-  CALL DEALIAZING(UA,UZ,UR)
+!  CALL DEALIAZING(UA,UZ,UR)
 
   CALL AZIMUT_MOD(UA,UZ,UR,SP_A,NA/2)
   CALL VERTIC_MOD(UA,UZ,UR,SP_Z,NZ/2)
@@ -418,21 +418,24 @@ program tcheby_1d
      DG04 = UA*UA*R
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
-
-     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
      
-     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*0.5_DP
+     CALL integrate_spec(quad,DG04,integ_a,PH,NA,NZ,NR,xmax,xmin)
+     CALL integrate_spec(quad,DG05,integ_z,PH,NA,NZ,NR,xmax,xmin)
+     CALL integrate_spec(quad,DG06,integ_r,PH,NA,NZ,NR,xmax,xmin)
+     J_U = integ_a + integ_r + integ_z
+     
+     
+     
+     J_U = J_U*DT
 
      CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
      CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
      
      if (nrank==0) then
-        write(42,*)TC,J_U
-        write(50,'(15(e15.8))')TC,DG01(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_AZI
-        write(60,'(15(e15.8))')TC,DG02(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP,E_VER
-        write(70,'(15(e15.8))')TC,DG03(PH%XST(1),PH%XST(2),PH%XST(3))*0.5_DP
+        write(42,'(2(e15.8))')TC,J_U
+        write(50,'(15(e15.8))')TC,integ_a,E_AZI
+        write(60,'(15(e15.8))')TC,integ_z,E_VER
+        write(70,'(15(e15.8))')TC,integ_r
      end if
 
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U

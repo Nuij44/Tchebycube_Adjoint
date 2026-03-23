@@ -21,4 +21,4 @@ conda activate Opti_1.8
 
 export I_MPI_PMI_LIBRARY=/usr/lib64/libpmi.so
 
-python3 optimize_TC.py --np $SLURM_NTASKS --input_jac run_TC.in --input_fun run_TC_fun.in --iter 10 --output Result --exe_dir build --E0 1E-4 --tol 0.01 -v #--conjgrad --superls
+python3 optimize_TC.py --np $SLURM_NTASKS --input_jac run_TC.in --input_fun run_TC_fun.in --iter 10 --output Result --exe_dir build --E0 1E-4 --tol 0.01 -v --conjgrad --superls

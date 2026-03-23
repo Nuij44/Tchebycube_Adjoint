@@ -34,8 +34,7 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_ua = 10.0d0*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t)
+udf_ua = (r - 3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)
 
 end function
 
@@ -47,8 +46,13 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_uz = 5.0d0*(r - 3)**2*(r - 1)**2*cos(theta)*cos(12.566370614359173d0 &
-      *t)*cos(6.2831853071795865d0*z)/(pi*r)
+udf_uz = (1.0d0/2.0d0)*(r - 3)**2*(r - 1)**2*cos(theta)*cos( &
+      6.2831853071795865d0*z)/(pi*r) - (-5.0d0/2.0d0*r**4*sin(theta)* &
+      cos(6.2831853071795865d0*z)/pi + 16*r**3*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 33*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 9.0d0/2.0d0*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r
 
 end function
 
@@ -59,7 +63,7 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_ur = 0
+udf_ur = (r - 3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)
 
 end function
 
@@ -93,7 +97,14 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_div = 0
+udf_div = (r*(r - 3)**2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z &
+      ) + r*(r - 1)**2*(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z &
+      ) + (r - 3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)) &
+      /r - (5*r**4*sin(theta)*sin(6.2831853071795865d0*z) - 32*r**3*sin &
+      (theta)*sin(6.2831853071795865d0*z) + 66*r**2*sin(theta)*sin( &
+      6.2831853071795865d0*z) - 48*r*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 9*sin(theta)*sin(6.2831853071795865d0*z &
+      ))/r
 
 end function
 
@@ -104,8 +115,13 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_NLr = -100.0d0*(r - 3)**4*(r - 1)**4*sin(theta)**2*sin( &
-      6.2831853071795865d0*z)**2*cos(12.566370614359173d0*t)**2/r
+udf_NLr = (r - 3)**2*(r - 1)**2*(4*r*(r - 3)*(r - 2)*(r - 1)*sin(theta)* &
+      sin(6.2831853071795865d0*z)**2 - (r - 3)**2*(r - 1)**2*sin(theta) &
+      *sin(6.2831853071795865d0*z)**2 + (r - 3)**2*(r - 1)**2*sin( &
+      6.2831853071795865d0*z)**2*cos(theta) + (5*r**4*sin(theta) - 32*r &
+      **3*sin(theta) + 66*r**2*sin(theta) - 48*r*sin(theta) + (r - 3)** &
+      2*(r - 1)**2*cos(theta) + 9*sin(theta))*cos(6.2831853071795865d0* &
+      z)**2)*sin(theta)/r
 
 end function
 
@@ -116,8 +132,12 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_NLa = 100.0d0*(r - 3)**4*(r - 1)**4*sin(theta)*cos(theta)*cos( &
-      12.566370614359173d0*t)**2/r
+udf_NLa = (r - 3)**2*(r - 1)**2*(5*r**4*sin(theta) + r**4*cos(theta) - &
+      32*r**3*sin(theta) - 8*r**3*cos(theta) + 63*r**2*sin(theta) + 3* &
+      sqrt(2.0d0)*r**2*sin(theta + 0.78539816339744831d0) + 19*r**2*cos &
+      (theta) - 36*r*sin(theta) - 12*sqrt(2.0d0)*r*sin(theta + &
+      0.78539816339744831d0) - 12*r*cos(theta) + 9*sqrt(2.0d0)*sin( &
+      theta + 0.78539816339744831d0))*sin(theta)/r
 
 end function
 
@@ -129,8 +149,13 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_NLz = -50.0d0*(r - 3)**4*(r - 1)**4*sin(6.2831853071795865d0*z)*cos( &
-      12.566370614359173d0*t)**2*cos(6.2831853071795865d0*z)/(pi*r**2)
+udf_NLz = (1.0d0/2.0d0)*(r - 3)**2*(r - 1)**2*(-r**4*sin(2.0d0*theta) + &
+      5*r**4*cos(2.0d0*theta) - 6*r**4 + 8*r**3*sin(2.0d0*theta) - 28*r &
+      **3*cos(2.0d0*theta) + 36*r**3 - 22*r**2*sin(2.0d0*theta) + 54*r &
+      **2*cos(2.0d0*theta) - 76*r**2 + 24*r*sin(2.0d0*theta) - 36*r*cos &
+      (2.0d0*theta) + 60*r - 9*sin(2.0d0*theta) + 9*cos(2.0d0*theta) - &
+      18)*sin(6.2831853071795865d0*z)*cos(6.2831853071795865d0*z)/(pi*r &
+      **2)
 
 end function
 
@@ -141,8 +166,15 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_Lr = -20.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos( &
-      theta)*cos(12.566370614359173d0*t)/r**2
+REAL*8, parameter :: pi = 3.1415926535897932d0
+udf_Lr = -4*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 2*((r - 3)**2 + 4*(r - 3)*(r - 1) + (r &
+      - 1)**2)*sin(theta)*sin(6.2831853071795865d0*z) + 1.0d0*((r - 3) &
+      **2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z) + (r - 1)**2 &
+      *(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z))/r - 2.0d0*(r - &
+      3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)/r**2 - &
+      2.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos(theta &
+      )/r**2
 
 end function
 
@@ -154,15 +186,14 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_La = -40.0d0*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t) + (20.0d0*(r &
-      - 3)**2 + 80.0d0*(r - 3)*(r - 1) + 20.0d0*(r - 1)**2)*sin(theta)* &
-      sin(6.2831853071795865d0*z)*cos(12.566370614359173d0*t) + 1.0d0*( &
-      10.0d0*(r - 3)**2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z &
-      )*cos(12.566370614359173d0*t) + 10.0d0*(r - 1)**2*(2*r - 6)*sin( &
-      theta)*sin(6.2831853071795865d0*z)*cos(12.566370614359173d0*t))/r &
-      - 20.0d0*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t)/r**2
+udf_La = -4*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 2*((r - 3)**2 + 4*(r - 3)*(r - 1) + (r &
+      - 1)**2)*sin(theta)*sin(6.2831853071795865d0*z) + 1.0d0*((r - 3) &
+      **2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z) + (r - 1)**2 &
+      *(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z))/r - 2.0d0*(r - &
+      3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)/r**2 + &
+      2.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos(theta &
+      )/r**2
 
 end function
 
@@ -174,19 +205,29 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_Lz = -20.0d0*pi*(r - 3)**2*(r - 1)**2*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/r + 1.0d0*( &
-      5.0d0*(r - 3)**2*(2*r - 2)*cos(theta)*cos(12.566370614359173d0*t) &
-      *cos(6.2831853071795865d0*z)/(pi*r) + 5.0d0*(r - 1)**2*(2*r - 6)* &
-      cos(theta)*cos(12.566370614359173d0*t)*cos(6.2831853071795865d0*z &
-      )/(pi*r) - 5.0d0*(r - 3)**2*(r - 1)**2*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r**2))/r &
-      + (10.0d0*(r - 3)**2 + 40.0d0*(r - 3)*(r - 1) + 10.0d0*(r - 1)**2 &
-      - 20.0d0*(r - 3)**2*(r - 1)/r - 20.0d0*(r - 3)*(r - 1)**2/r + &
-      10.0d0*(r - 3)**2*(r - 1)**2/r**2)*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r) - &
-      5.0d0*(r - 3)**2*(r - 1)**2*cos(theta)*cos(12.566370614359173d0*t &
-      )*cos(6.2831853071795865d0*z)/(pi*r**3)
+udf_Lz = -2*pi*((r - 3)**2*(r - 1)**2*cos(theta) + (5*r**4 - 32*r**3 + &
+      66*r**2 - 48*r + 9)*sin(theta))*cos(6.2831853071795865d0*z)/r + &
+      1.0d0*((1.0d0/2.0d0)*(r - 3)**2*(2*r - 2)*cos(theta)*cos( &
+      6.2831853071795865d0*z)/(pi*r) + (1.0d0/2.0d0)*(r - 1)**2*(2*r - &
+      6)*cos(theta)*cos(6.2831853071795865d0*z)/(pi*r) - (-10*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi + 48*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 66*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r - 1.0d0/2.0d0*(r - 3)**2*(r - 1)**2 &
+      *cos(theta)*cos(6.2831853071795865d0*z)/(pi*r**2) + (-5.0d0/2.0d0 &
+      *r**4*sin(theta)*cos(6.2831853071795865d0*z)/pi + 16*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi - 33*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 9.0d0/2.0d0*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r**2)/r + ((r - 3)**2*cos(theta) + 4* &
+      (r - 3)*(r - 1)*cos(theta) + (r - 1)**2*cos(theta) + 6*(5*r**2 - &
+      16*r + 11)*sin(theta) - 2*(r - 3)**2*(r - 1)*cos(theta)/r - 2*(r &
+      - 3)*(r - 1)**2*cos(theta)/r - 4*(5*r**3 - 24*r**2 + 33*r - 12)* &
+      sin(theta)/r + (r - 3)**2*(r - 1)**2*cos(theta)/r**2 + (5*r**4 - &
+      32*r**3 + 66*r**2 - 48*r + 9)*sin(theta)/r**2)*cos( &
+      6.2831853071795865d0*z)/(pi*r) - 0.5d0*((r - 3)**2*(r - 1)**2*cos &
+      (theta) + (5*r**4 - 32*r**3 + 66*r**2 - 48*r + 9)*sin(theta))*cos &
+      (6.2831853071795865d0*z)/(pi*r**3)
 
 end function
 
@@ -197,10 +238,8 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_grada_r = 10.0d0*(r - 3)**2*(2*r - 2)*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t) + 10.0d0*(r - &
-      1)**2*(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z)*cos( &
-      12.566370614359173d0*t)
+udf_grada_r = (r - 3)**2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z &
+      ) + (r - 1)**2*(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z)
 
 end function
 
@@ -211,8 +250,8 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_grada_a = 10.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)* &
-      cos(theta)*cos(12.566370614359173d0*t)/r
+udf_grada_a = (r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos( &
+      theta)/r
 
 end function
 
@@ -224,8 +263,8 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_grada_z = 20.0d0*pi*(r - 3)**2*(r - 1)**2*sin(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)
+udf_grada_z = 2*pi*(r - 3)**2*(r - 1)**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)
 
 end function
 
@@ -237,12 +276,19 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_gradz_r = 5.0d0*(r - 3)**2*(2*r - 2)*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r) + &
-      5.0d0*(r - 1)**2*(2*r - 6)*cos(theta)*cos(12.566370614359173d0*t) &
-      *cos(6.2831853071795865d0*z)/(pi*r) - 5.0d0*(r - 3)**2*(r - 1)**2 &
-      *cos(theta)*cos(12.566370614359173d0*t)*cos(6.2831853071795865d0* &
-      z)/(pi*r**2)
+udf_gradz_r = (1.0d0/2.0d0)*(r - 3)**2*(2*r - 2)*cos(theta)*cos( &
+      6.2831853071795865d0*z)/(pi*r) + (1.0d0/2.0d0)*(r - 1)**2*(2*r - &
+      6)*cos(theta)*cos(6.2831853071795865d0*z)/(pi*r) - (-10*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi + 48*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 66*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r - 1.0d0/2.0d0*(r - 3)**2*(r - 1)**2 &
+      *cos(theta)*cos(6.2831853071795865d0*z)/(pi*r**2) + (-5.0d0/2.0d0 &
+      *r**4*sin(theta)*cos(6.2831853071795865d0*z)/pi + 16*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi - 33*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 9.0d0/2.0d0*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r**2
 
 end function
 
@@ -254,8 +300,13 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_gradz_a = -5.0d0*(r - 3)**2*(r - 1)**2*sin(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r**2)
+udf_gradz_a = (-1.0d0/2.0d0*(r - 3)**2*(r - 1)**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/(pi*r) - (-5.0d0/2.0d0*r**4*cos(theta)* &
+      cos(6.2831853071795865d0*z)/pi + 16*r**3*cos(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 33*r**2*cos(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*r*cos(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 9.0d0/2.0d0*cos(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r)/r
 
 end function
 
@@ -266,8 +317,12 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_gradz_z = -10.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)* &
-      cos(theta)*cos(12.566370614359173d0*t)/r
+udf_gradz_z = -(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos( &
+      theta)/r - (5*r**4*sin(theta)*sin(6.2831853071795865d0*z) - 32*r &
+      **3*sin(theta)*sin(6.2831853071795865d0*z) + 66*r**2*sin(theta)* &
+      sin(6.2831853071795865d0*z) - 48*r*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 9*sin(theta)*sin(6.2831853071795865d0*z &
+      ))/r
 
 end function
 
@@ -278,7 +333,8 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_gradr_r = 0
+udf_gradr_r = (r - 3)**2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z &
+      ) + (r - 1)**2*(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z)
 
 end function
 
@@ -289,7 +345,8 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_gradr_a = 0
+udf_gradr_a = (r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos( &
+      theta)/r
 
 end function
 
@@ -300,7 +357,9 @@ REAL*8, intent(in) :: theta
 REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 
-udf_gradr_z = 0
+REAL*8, parameter :: pi = 3.1415926535897932d0
+udf_gradr_z = 2*pi*(r - 3)**2*(r - 1)**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)
 
 end function
 
@@ -312,10 +371,21 @@ REAL*8, intent(in) :: z
 REAL*8, intent(in) :: r
 REAL*8, intent(in) :: nu
 
-udf_scm_ur = 20.0d0*nu*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z) &
-      *cos(theta)*cos(12.566370614359173d0*t)/r**2 - 100.0d0*(r - 3)**4 &
-      *(r - 1)**4*sin(theta)**2*sin(6.2831853071795865d0*z)**2*cos( &
-      12.566370614359173d0*t)**2/r
+REAL*8, parameter :: pi = 3.1415926535897932d0
+udf_scm_ur = -nu*(-4*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 2*((r - 3)**2 + 4*(r - 3)*(r - 1) + (r &
+      - 1)**2)*sin(theta)*sin(6.2831853071795865d0*z) + 1.0d0*((r - 3) &
+      **2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z) + (r - 1)**2 &
+      *(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z))/r - 2.0d0*(r - &
+      3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)/r**2 - &
+      2.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos(theta &
+      )/r**2) + (r - 3)**2*(r - 1)**2*(4*r*(r - 3)*(r - 2)*(r - 1)*sin( &
+      theta)*sin(6.2831853071795865d0*z)**2 - (r - 3)**2*(r - 1)**2*sin &
+      (theta)*sin(6.2831853071795865d0*z)**2 + (r - 3)**2*(r - 1)**2* &
+      sin(6.2831853071795865d0*z)**2*cos(theta) + (5*r**4*sin(theta) - &
+      32*r**3*sin(theta) + 66*r**2*sin(theta) - 48*r*sin(theta) + (r - &
+      3)**2*(r - 1)**2*cos(theta) + 9*sin(theta))*cos( &
+      6.2831853071795865d0*z)**2)*sin(theta)/r
 
 end function
 
@@ -328,19 +398,19 @@ REAL*8, intent(in) :: r
 REAL*8, intent(in) :: nu
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_scm_ua = -nu*(-40.0d0*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t) + (20.0d0*(r &
-      - 3)**2 + 80.0d0*(r - 3)*(r - 1) + 20.0d0*(r - 1)**2)*sin(theta)* &
-      sin(6.2831853071795865d0*z)*cos(12.566370614359173d0*t) + 1.0d0*( &
-      10.0d0*(r - 3)**2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z &
-      )*cos(12.566370614359173d0*t) + 10.0d0*(r - 1)**2*(2*r - 6)*sin( &
-      theta)*sin(6.2831853071795865d0*z)*cos(12.566370614359173d0*t))/r &
-      - 20.0d0*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t)/r**2) - &
-      40.0d0*pi*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
-      12.566370614359173d0*t)*sin(6.2831853071795865d0*z) + 100.0d0*(r &
-      - 3)**4*(r - 1)**4*sin(theta)*cos(theta)*cos(12.566370614359173d0 &
-      *t)**2/r
+udf_scm_ua = -nu*(-4*pi**2*(r - 3)**2*(r - 1)**2*sin(theta)*sin( &
+      6.2831853071795865d0*z) + 2*((r - 3)**2 + 4*(r - 3)*(r - 1) + (r &
+      - 1)**2)*sin(theta)*sin(6.2831853071795865d0*z) + 1.0d0*((r - 3) &
+      **2*(2*r - 2)*sin(theta)*sin(6.2831853071795865d0*z) + (r - 1)**2 &
+      *(2*r - 6)*sin(theta)*sin(6.2831853071795865d0*z))/r - 2.0d0*(r - &
+      3)**2*(r - 1)**2*sin(theta)*sin(6.2831853071795865d0*z)/r**2 + &
+      2.0d0*(r - 3)**2*(r - 1)**2*sin(6.2831853071795865d0*z)*cos(theta &
+      )/r**2) + (r - 3)**2*(r - 1)**2*(5*r**4*sin(theta) + r**4*cos( &
+      theta) - 32*r**3*sin(theta) - 8*r**3*cos(theta) + 63*r**2*sin( &
+      theta) + 3*sqrt(2.0d0)*r**2*sin(theta + 0.78539816339744831d0) + &
+      19*r**2*cos(theta) - 36*r*sin(theta) - 12*sqrt(2.0d0)*r*sin(theta &
+      + 0.78539816339744831d0) - 12*r*cos(theta) + 9*sqrt(2.0d0)*sin( &
+      theta + 0.78539816339744831d0))*sin(theta)/r
 
 end function
 
@@ -353,23 +423,35 @@ REAL*8, intent(in) :: r
 REAL*8, intent(in) :: nu
 
 REAL*8, parameter :: pi = 3.1415926535897932d0
-udf_scm_uz = -nu*(-20.0d0*pi*(r - 3)**2*(r - 1)**2*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/r + 1.0d0*( &
-      5.0d0*(r - 3)**2*(2*r - 2)*cos(theta)*cos(12.566370614359173d0*t) &
-      *cos(6.2831853071795865d0*z)/(pi*r) + 5.0d0*(r - 1)**2*(2*r - 6)* &
-      cos(theta)*cos(12.566370614359173d0*t)*cos(6.2831853071795865d0*z &
-      )/(pi*r) - 5.0d0*(r - 3)**2*(r - 1)**2*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r**2))/r &
-      + (10.0d0*(r - 3)**2 + 40.0d0*(r - 3)*(r - 1) + 10.0d0*(r - 1)**2 &
-      - 20.0d0*(r - 3)**2*(r - 1)/r - 20.0d0*(r - 3)*(r - 1)**2/r + &
-      10.0d0*(r - 3)**2*(r - 1)**2/r**2)*cos(theta)*cos( &
-      12.566370614359173d0*t)*cos(6.2831853071795865d0*z)/(pi*r) - &
-      5.0d0*(r - 3)**2*(r - 1)**2*cos(theta)*cos(12.566370614359173d0*t &
-      )*cos(6.2831853071795865d0*z)/(pi*r**3)) - 20.0d0*(r - 3)**2*(r - &
-      1)**2*sin(12.566370614359173d0*t)*cos(theta)*cos( &
-      6.2831853071795865d0*z)/r - 50.0d0*(r - 3)**4*(r - 1)**4*sin( &
-      6.2831853071795865d0*z)*cos(12.566370614359173d0*t)**2*cos( &
-      6.2831853071795865d0*z)/(pi*r**2)
+udf_scm_uz = -nu*(-2*pi*((r - 3)**2*(r - 1)**2*cos(theta) + (5*r**4 - 32 &
+      *r**3 + 66*r**2 - 48*r + 9)*sin(theta))*cos(6.2831853071795865d0* &
+      z)/r + 1.0d0*((1.0d0/2.0d0)*(r - 3)**2*(2*r - 2)*cos(theta)*cos( &
+      6.2831853071795865d0*z)/(pi*r) + (1.0d0/2.0d0)*(r - 1)**2*(2*r - &
+      6)*cos(theta)*cos(6.2831853071795865d0*z)/(pi*r) - (-10*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi + 48*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 66*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r - 1.0d0/2.0d0*(r - 3)**2*(r - 1)**2 &
+      *cos(theta)*cos(6.2831853071795865d0*z)/(pi*r**2) + (-5.0d0/2.0d0 &
+      *r**4*sin(theta)*cos(6.2831853071795865d0*z)/pi + 16*r**3*sin( &
+      theta)*cos(6.2831853071795865d0*z)/pi - 33*r**2*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi + 24*r*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi - 9.0d0/2.0d0*sin(theta)*cos( &
+      6.2831853071795865d0*z)/pi)/r**2)/r + ((r - 3)**2*cos(theta) + 4* &
+      (r - 3)*(r - 1)*cos(theta) + (r - 1)**2*cos(theta) + 6*(5*r**2 - &
+      16*r + 11)*sin(theta) - 2*(r - 3)**2*(r - 1)*cos(theta)/r - 2*(r &
+      - 3)*(r - 1)**2*cos(theta)/r - 4*(5*r**3 - 24*r**2 + 33*r - 12)* &
+      sin(theta)/r + (r - 3)**2*(r - 1)**2*cos(theta)/r**2 + (5*r**4 - &
+      32*r**3 + 66*r**2 - 48*r + 9)*sin(theta)/r**2)*cos( &
+      6.2831853071795865d0*z)/(pi*r) - 0.5d0*((r - 3)**2*(r - 1)**2*cos &
+      (theta) + (5*r**4 - 32*r**3 + 66*r**2 - 48*r + 9)*sin(theta))*cos &
+      (6.2831853071795865d0*z)/(pi*r**3)) + (1.0d0/2.0d0)*(r - 3)**2*(r &
+      - 1)**2*(-r**4*sin(2.0d0*theta) + 5*r**4*cos(2.0d0*theta) - 6*r** &
+      4 + 8*r**3*sin(2.0d0*theta) - 28*r**3*cos(2.0d0*theta) + 36*r**3 &
+      - 22*r**2*sin(2.0d0*theta) + 54*r**2*cos(2.0d0*theta) - 76*r**2 + &
+      24*r*sin(2.0d0*theta) - 36*r*cos(2.0d0*theta) + 60*r - 9*sin( &
+      2.0d0*theta) + 9*cos(2.0d0*theta) - 18)*sin(6.2831853071795865d0* &
+      z)*cos(6.2831853071795865d0*z)/(pi*r**2)
 
 end function
 

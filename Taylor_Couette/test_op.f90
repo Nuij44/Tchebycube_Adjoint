@@ -120,9 +120,6 @@ program tcheby_1d
      read(24, nml=parameters_timescheme, IOSTAT=iostat)
      read(24, nml=parameters_diagnostics, IOSTAT=iostat)
      close(24)
-     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/dump' )
-     ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/save' )
-     ierr = SYSTEM('mkdir -p '//trim(root_dir)//trim(snap_dir) )
      write(*,parameters_cube)
      write(*,parameters_physical)
      write(6,*)TRIM(TRIM(root_dir)//'timevar')
@@ -180,10 +177,6 @@ program tcheby_1d
   nb_iter = floor(tmax/dt)
 
   J_U = 0._DP
-  
-  file_dump = trim(root_dir)//'dump/dump.h5'
-  base_snap = trim(root_dir)//trim(snap_dir)//'snap_'
-  base_save = trim(root_dir)//'save/save_'
 
    ! GRILLE 2D
   CALL DECOMP_2D_INIT( &
@@ -358,7 +351,7 @@ program tcheby_1d
   if (nrank == 0) print*,"Vérif lap(U) = S"
 
   FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-     DG01(I,J,K) = udf_st_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) - udf_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K))/(R(I,J,K)**2)
+     DG01(I,J,K) = udf_st_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K)) !- udf_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K))/(R(I,J,K)**2)
      FI(I,J,K)   = udf_phi(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
   END FORALL
 
@@ -374,10 +367,6 @@ program tcheby_1d
   FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
      DG01(I,J,K) = (R(I,J,K))! - 1.) * (R(I,J,K) - 3. )*R(I,J,K)
   end FORALL
-
-!  CALL get_quadrature_hhi(quad,DG01,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  Vol = DG02(PH%XST(1),PH%XST(2),PH%XST(3))
-  !call integrate_volume(DG01,A_tot,Z_tot,R_tot,vol)
 
   CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
   
@@ -453,13 +442,11 @@ program tcheby_1d
   SR = SR + UR/DT
 
   
-  CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
-  
   UAM1=UA
   UZM1=UZ
   URM1=UR
   
- ! CALL dealiazing(ua,uz,ur)
+  CALL dealiazing(ua,uz,ur)
   
   CALL COMPUTE_NON_LINEAR_TERMS(&
        A, Z, R, OPA, OPZ, OPR, UA, UZ, UR , NLA, NLZ, NLR,&
@@ -577,7 +564,7 @@ program tcheby_1d
      UZM1=UZ
      URM1=UR
 
-!     CALL dealiazing(ua,uz,ur)
+     CALL dealiazing(ua,uz,ur)
      
  
      CALL COMPUTE_NON_LINEAR_TERMS(&
