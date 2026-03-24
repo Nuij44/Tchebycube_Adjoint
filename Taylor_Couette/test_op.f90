@@ -122,8 +122,6 @@ program tcheby_1d
      close(24)
      write(*,parameters_cube)
      write(*,parameters_physical)
-     write(6,*)TRIM(TRIM(root_dir)//'timevar')
-     OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
   end if
 
   
@@ -266,15 +264,15 @@ program tcheby_1d
   
   err_grad = MAXVAL(DG04)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ua)_a : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ua)_a : ",err_grad, err_grad/MAXVAL(DG01)
 
   err_grad = MAXVAL(DG05)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ua)_z : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ua)_z : ",err_grad, err_grad/MAXVAL(DG02)
 
   err_grad = MAXVAL(DG06)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ua)_r : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ua)_r : ",err_grad, err_grad/MAXVAL(DG03)
 
   CALL GRAD(A, Z, R, OPA, OPZ, OPR, UZ, DG01, DG02, DG03)
     
@@ -289,15 +287,15 @@ program tcheby_1d
   
   err_grad = MAXVAL(DG04)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Uz)_a : ",err_grad
+  if (nrank==0)print*,"Error Grad(Uz)_a : ",err_grad, err_grad/MAXVAL(DG01)
 
   err_grad = MAXVAL(DG05)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Uz)_z : ",err_grad
+  if (nrank==0)print*,"Error Grad(Uz)_z : ",err_grad, err_grad/MAXVAL(DG02)
 
   err_grad = MAXVAL(DG06)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Uz)_r : ",err_grad
+  if (nrank==0)print*,"Error Grad(Uz)_r : ",err_grad, err_grad/MAXVAL(DG03)
 
     CALL GRAD(A, Z, R, OPA, OPZ, OPR, UR, DG01, DG02, DG03)
 
@@ -311,15 +309,15 @@ program tcheby_1d
 
   err_grad = MAXVAL(DG04)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ur)_a : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ur)_a : ",err_grad, err_grad/MAXVAL(DG01)
 
   err_grad = MAXVAL(DG05)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ur)_z : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ur)_z : ",err_grad, err_grad/MAXVAL(DG02)
 
   err_grad = MAXVAL(DG06)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_grad,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error Grad(Ur)_r : ",err_grad
+  if (nrank==0)print*,"Error Grad(Ur)_r : ",err_grad, err_grad/MAXVAL(DG03)
 
 
   if (nrank == 0) print*,"Vérif NL"
@@ -336,15 +334,15 @@ program tcheby_1d
 
   err_nl = MAXVAL(DG04)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error NL(U)_a : ",err_nl
+  if (nrank==0)print*,"Error NL(U)_a : ",err_nl, err_nl/MAXVAL(NLA)
 
   err_nl = MAXVAL(DG05)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error NL(U)_z : ",err_nl
+  if (nrank==0)print*,"Error NL(U)_z : ",err_nl, err_nl/MAXVAL(NLZ)
 
   err_nl = MAXVAL(DG06)
   CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_nl,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)  
-  if (nrank==0)print*,"Error NL(U)_r : ",err_nl
+  if (nrank==0)print*,"Error NL(U)_r : ",err_nl, err_nl/MAXVAL(NLR)
   
 
   
@@ -370,7 +368,7 @@ program tcheby_1d
 
   CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
   
-  if (nrank == 0)print*,' Volume : ',vol,vol/pi
+  if (nrank == 0)print*,' Volume : ',vol,1._DP - vol/(8.*pi), abs(vol - 8.*PI)
 
 
   TC = 0._DP
@@ -648,9 +646,22 @@ program tcheby_1d
      ERR_MMS(2) = MAXVAL(DG02)
      ERR_MMS(3) = MAXVAL(DG03)
      CALL MPI_ALLREDUCE(MPI_IN_PLACE,ERR_MMS,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-       
+
+     CALL GRAD( A,Z,R, &
+          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+
+     is = get_is_b([0,0,0])
+     ie = get_ie_b([0,0,0])
+     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+        DG04(I,J,K) = ABS( DG01(I,J,K) - udf_dpda(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+        DG05(I,J,K) = ABS( DG02(I,J,K) - udf_dpdz(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+        DG06(I,J,K) = ABS( DG03(I,J,K) - udf_dpdr(TC,A(I,J,K),Z(I,J,K),R(I,J,K)))
+     END FORALL
+
+
+     
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms
+     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms,MAX(MAXVAL(ABS(DG04)),MAXVAL(ABS(DG05)),MAXVAL(ABS(DG06)) )
 
      if (cfl .GT. 10.) then
         if (rank == 0) print'("CFL TOO BIG.")'

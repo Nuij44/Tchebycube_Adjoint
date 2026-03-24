@@ -425,9 +425,6 @@ program tcheby_1d
      J_U = integ_a + integ_r + integ_z
      
      
-     
-     J_U = J_U*DT
-
      CALL AZIMUT_MOD(UA,UZ,UR,E_AZI,max_mod)
      CALL VERTIC_MOD(UA,UZ,UR,E_VER,max_mod)
      

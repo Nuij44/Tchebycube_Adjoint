@@ -5,7 +5,7 @@ nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
 z_min = 0.0 ,
-z_max = 1.0 ,  
+z_max = 2.0 ,  
 nb_cpu_y = 20 ,
 nb_cpu_z = 16
 /
