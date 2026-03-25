@@ -171,6 +171,8 @@ program tcheby_1d
   prm_B =(r_min**2/(1._DP - eta**2)) * (OMEGA_i - OMEGA_o) 
   
   nb_iter = floor(tmax/dt)
+
+  if (rank == 0) print*,nb_iter
   
   file_dump = trim(root_dir)//'dump/dump.h5'
   base_snap = trim(root_dir)//trim(snap_dir)//'snap_'
@@ -271,6 +273,8 @@ program tcheby_1d
      end if
   end if
 
+  it_time = 1
+  
   SA = UA/DT
   SZ = UZ/DT
   SR = UR/DT
