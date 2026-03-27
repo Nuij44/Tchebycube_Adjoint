@@ -6,8 +6,10 @@ module m_quadrature
   implicit none
   type t_quadrature
      real(kind=8)::xmin(3),xmax(3)
-     real(kind=8),allocatable::quad_x(:),quad_y(:),quad_z(:),mean(:),cheb_coeffs(:)
+     real(kind=8),allocatable::quad_x(:),quad_y(:),quad_z(:),mean(:),cheb_coeffs(:),clenshaw_curtis_w(:,:,:)
      integer :: rank
+     REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGY,DGZ
+     real,ALLOCATABLE,dimension(:,:) :: wkU
   end type t_quadrature
   
 contains
@@ -26,9 +28,14 @@ contains
 
     integer :: i,j,k
     REAL(KIND=8),ALLOCATABLE,DIMENSION(:) :: mean,cheb_coeffs
+    REAL(DP) :: wk,dn
 
     call mpi_comm_rank(mpi_comm_world,this%rank,i)
-    
+
+    call alloc_y(this%dgy, OPT_GLOBAL=.TRUE.)
+    call alloc_z(this%dgz, OPT_GLOBAL=.TRUE.)
+
+    allocate(this%wkU(ZST(1):ZEN(1),ZST(2):ZEN(2)))
     
     ALLOCATE(this%mean(1:nz+1),this%cheb_coeffs(1:Nz+1))
 
@@ -72,6 +79,30 @@ contains
 !    THIS%QUAD_X = THIS%QUAD_X/(XMAX(1)-XMIN(1))
 !    THIS%QUAD_Y = THIS%QUAD_Y/(XMAX(2)-XMIN(2))
 !    THIS%QUAD_Z = THIS%QUAD_Z/(XMAX(3)-XMIN(3))
+
+
+    ! CLENSHAW-CURTS WEIGHT
+    call alloc_z(this%clenshaw_curtis_w, OPT_GLOBAL=.TRUE.)
+
+    DO k = ZST(3),ZEN(3)
+       wk = 0._DP
+       do i = ZST(3),ZEN(3),2
+          if (i == zst(3) .OR. i == zen(3)) then
+             dn = 1._DP
+          else
+             dn = 2._DP
+          end if
+          wk = wk + dn/(1._DP - (i - 1)**2) * cos((i-1)*(k-1)*pi/(ZEN(3) - 1))
+       end do
+       if (k == ZST(3) .OR. k == ZEN(3)) then
+          wk = wk / (ZEN(3)-1)
+       else
+          wk = 2._DP * wk / (ZEN(3)-1)
+       end if
+
+       this%clenshaw_curtis_w(:,:,k) = wk
+       
+    end DO
 
     
   end subroutine INIT_quadrature_hhi
@@ -157,71 +188,60 @@ contains
     call c2c_1m_x(dg_x,plan_fwd_x)
     zg_X = 0._DP
     zg_X(1,:,:) = DG_X(1,:,:)
+    call c2c_1m_x(zg_x,plan_bck_x)
     
     CALL TRANSPOSE_X_TO_Y(zg_X,zg1_Y)
     call c2c_1m_y(zg1_y,plan_fwd_y)
     zg2_Y = 0._DP
     zg2_Y(:,1,:) = zg1_Y(:,1,:)
+    call c2c_1m_y(zg2_y,plan_bck_y)
 
     CALL TRANSPOSE_Y_TO_Z(zg2_Y,zg1_Z)
-    
-    !Recherche du rang du processus possedant zg1_Z(1,1,:)
 
-    rank_mode0 = 0
+    CALL integrate_spec_r(this,ZG1_Z,ZG2_Z,xmin,xmax,na,nz,nr,ph)
 
-    if (PH%ZST(1)==1 .AND. PH%ZST(2)==1) then
-       rank_mode0 = this%rank
-       this%mean(1:nr+1) = zg1_Z(1,1,1:NR+1)/sqrt(dble((na+1)*(nz+1)))
-    end if
 
-    CALL MPI_ALLREDUCE(MPI_IN_PLACE,rank_mode0,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,IERR)
+    integral_z = zg2_z(PH%zst(1),PH%zst(2),PH%zst(3))
 
-    call MPI_Bcast(this%mean, nr+1, MPI_DOUBLE_PRECISION,rank_mode0,MPI_COMM_WORLD,ierr)
+    ! ----------------------------------------------------------------
+    ! Etape 4 : Assemblage final
+    !           I = Lx * Ly * Lz * ∫ mean_xy(ξ) dξ
+    ! ----------------------------------------------------------------
+    Lx = xmax(1) - xmin(1)
+    LY = xmax(2) - xmin(2)
+  
+    vol = Lx * Ly * integral_z
+  end subroutine integrate_spec
+  
+  
+  subroutine integrate_spec_r(this,U,vol_az,xmin,xmax,na,nz,nr,ph)
+    type(t_quadrature) :: this
+    COMPLEX(kind=8), allocatable :: U(:,:,:)
+    COMPLEX(kind=8), allocatable :: vol_az(:,:,:)
+    integer :: na, nz, nr
+    REAL(kind=8), dimension(3) :: xmax, xmin
+    integer :: i,j,k
+    type(decomp_info) :: ph
 
-    ! ----------------------------------------------------
-    ! Etape 2 : Coefficients de Tchebychev de mean(r)
-    !           via DCT-II (formule directe)
-    ! ----------------------------------------------------
-
-    do n = 0, NR
-       this%cheb_coeffs(n+1) = 0.0d0
-       do k = 1, NR+1
-          this%cheb_coeffs(n+1) = this%cheb_coeffs(n+1) + this%mean(k) * cos(PI * dble(n) * dble(k-1) / dble(NR))  ! ← dble(NR) correct
-       end do
-       this%cheb_coeffs(n+1) = this%cheb_coeffs(n+1) * 2.0d0 / dble(NR)  ! ← dble(NR) correct
+!    call transpose_x_to_y(U,this%DGY)
+!    call transpose_y_to_z(this%DGY,this%DGZ)
+    this%wkU = 0._DP
+    do k = 1, nr+1
+       this%wkU = this%wkU + U(:,:,K)*this%clenshaw_curtis_w(:,:,K)
     end do
 
-    ! Correction du mode 0
-    this%cheb_coeffs(1) = this%cheb_coeffs(1) * 0.5d0
-    this%cheb_coeffs(NR+1) = this%cheb_coeffs(NR+1) * 0.5d0
+    do i = PH%ZST(1),PH%ZEN(1)
+       do j = PH%ZST(2),PH%ZEN(2)
+          VOL_AZ(i,j,:) = this%wkU(i,j) * 0.5_DP * (Xmax(3) - Xmin(3))
+       end do
+    end do
 
-  ! ----------------------------------------------------------------
-  ! Etape 3 : Intégration Tchebychev
-  !           ∫_{-1}^{1} T_n(ξ) dξ = 2/(1-n²)  si n pair, 0 sinon
-  ! ----------------------------------------------------------------
-  LZ = 0.5d0 * (xmax(3) - xmin(3))    ! jacobien dξ → dz
-
-  integral_z = 0.0d0
-  do n = 0, Nr
-    if (mod(n,2) == 0) then     ! modes pairs uniquement
-      if (n == 0) then
-        weight = 2.0d0          ! ∫T_0 dξ = 2
-      else
-        weight = 2.0d0 / (1.0d0 - dble(n*n))
-      end if
-      integral_z = integral_z + this%cheb_coeffs(n+1) * weight
-    end if
-  end do
-
-  ! ----------------------------------------------------------------
-  ! Etape 4 : Assemblage final
-  !           I = Lx * Ly * Lz * ∫ mean_xy(ξ) dξ
-  ! ----------------------------------------------------------------
-  Lx = xmax(1) - xmin(1)
-  LY = xmax(2) - xmin(2)
-  
-  vol = Lx * Ly * Lz * integral_z
     
-  end subroutine integrate_spec
+!    call transpose_z_to_y(this%DGZ,this%DGY)
+!    call transpose_y_to_x(this%DGY,vol_az)
+
+
+    
+  end subroutine integrate_spec_r
   
 end module m_quadrature

@@ -220,6 +220,4 @@ contains
     READ(STR,*,IOSTAT=STAT)  R8
   END SUBROUTINE STR2R8
 
-
-  
-end module m_numerics
+END module m_numerics

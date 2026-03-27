@@ -35,7 +35,7 @@ program tcheby_1d
   real(kind=8),allocatable     ::  dg01(:,:,:),dg02(:,:,:),dg03(:,:,:)
   real(kind=8),allocatable     ::  dg04(:,:,:),dg05(:,:,:),dg06(:,:,:)
   real(kind=8),allocatable     ::  dg07(:,:,:),dg08(:,:,:),dg09(:,:,:),DG10(:,:,:)
-  real(kind=8),allocatable     ::  dg11(:,:,:),dg12(:,:,:),dg13(:,:,:),DG14(:,:,:)
+  real(kind=8),allocatable     ::  dg11(:,:,:),dg12(:,:,:),dg13(:,:,:),DG14(:,:,:),vol_az(:,:)
 
   integer                  ::  i,j,k
 
@@ -99,7 +99,7 @@ program tcheby_1d
   REAL(DP),DIMENSION(:,:,:,:),ALLOCATABLE :: SAVE_UA,SAVE_UZ,SAVE_UR
 
   COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA,DGZ,DGR
-  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA_Y,DGZ_Y,DGR_Y
+  COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGA_Y,DGZ_Y,DGR_Y, DGA_Z
   
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
@@ -122,6 +122,7 @@ program tcheby_1d
      close(24)
      write(*,parameters_cube)
      write(*,parameters_physical)
+     OPEN(UNIT=30, FILE='err.dat', status='new', action='write')
   end if
 
   
@@ -368,9 +369,10 @@ program tcheby_1d
 
   CALL integrate_spec(quad,DG01,VOL,PH,NA,NZ,NR,xmax,xmin)
   
-  if (nrank == 0)print*,' Volume : ',vol,1._DP - vol/(8.*pi), abs(vol - 8.*PI)
+  if (nrank == 0)print*,' Volume : ',vol, abs(vol - 8.*PI)/(8._DP*pi)
 
 
+    
   TC = 0._DP
   FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
      UA(I,J,K) = udf_ua(TC,A(I,J,K),Z(I,J,K),R(I,J,K))
@@ -381,6 +383,11 @@ program tcheby_1d
      SZ(I,J,K) = udf_scm_uz(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
      SR(I,J,K) = udf_scm_ur(TC+DT,A(I,J,K),Z(I,J,K),R(I,J,K),NU)
   END FORALL
+
+  UA = 0._DP
+  UZ = 0._DP
+  UR = 0._DP
+
   
   CALL COMPUTE_NON_LINEAR_TERMS(&
        A, Z, R, OPA, OPZ, OPR, UA, UZ, UR , NLA, NLZ, NLR,&
@@ -661,8 +668,10 @@ program tcheby_1d
 
      
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms,MAX(MAXVAL(ABS(DG04)),MAXVAL(ABS(DG05)),MAXVAL(ABS(DG06)) )
-
+     if (rank==0) then
+        print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,err_mms,MAX(MAXVAL(ABS(DG04)),MAXVAL(ABS(DG05)),MAXVAL(ABS(DG06)) )
+        write(30,'(e15.8,E15.8)')tc,maxval(err_mms)
+     end if
      if (cfl .GT. 10.) then
         if (rank == 0) print'("CFL TOO BIG.")'
         call MPI_FINALIZE(ierr)
@@ -677,583 +686,6 @@ program tcheby_1d
   STOP
 
   
-  CALL DUMP_HDF5_BASIC(file_dump,'WRITE',TC,DT,msh,UA,UZ,UR,Pres,DG01,dg09)
-  
-  UA_T = UA
-  UZ_T = UZ
-  UR_T = UR
-
-
-  if (rank == 0) then
-     write(6,'("--------------------------------------")')
-     write(6,'("          Adjoint looping")')
-     write(6,'("--------------------------------------")')
-  end if
-  
-  NU_MOMENTUM = nu*[1,1,1]!*0.5   ! changment de signe pour le problème adjoint
-  NU_POISSON  = 1.
-  dt = - dt                      ! DT < 0 pour remonter vers U0_tilde
-
-
-  CALL EQN_UA_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=1 )
-  CALL EQN_UA_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
-  CALL EQN_UA_AD%INITIALISE_SVV( MSH, OPA, OPZ, OPR, ALPHA, BETA, PH )
-  CALL EQN_UA_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
-     
-  CALL EQN_UZ_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=2 )
-  CALL EQN_UZ_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
-  CALL EQN_UZ_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-  CALL EQN_UZ_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
-  
-  CALL EQN_UR_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 , AXIS=3)
-  CALL EQN_UR_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
-  CALL EQN_UR_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-  CALL EQN_UR_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
-  
-  CALL EQN_FI_AD%SET_PARAMS( NU=NU_POISSON , SIGMA=0D0 , AXIS=0)
-  CALL EQN_FI_AD%SET_BCS( AXIS=3 , BCS_MINUS=NEUMANN , BCS_PLUS=NEUMANN )
-  CALL EQN_FI_AD%INITIALISE_SVV(MSH,OPA,OPZ,OPR,ALPHA,BETA,PH)
-  CALL EQN_FI_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
-     
-  
-  !Restart
-  
-  !  TC = 0._DP
-  
-  UA = 0._DP
-  UZ = 0._DP
-  UR = 0._DP
-  
-  UAM1 = UA
-  UZM1 = UZ
-  URM1 = UR
-  
-  NLAM1 = 0._DP
-  NLZM1 = 0._DP
-  NLRM1 = 0._DP
-     
-  PRES = 0._DP
-
-  if (memoire) then
-     DG04(:,:,:) = SAVE_UA(nb_iter/inter_order,:,:,:)
-     DG05(:,:,:) = SAVE_UZ(nb_iter/inter_order,:,:,:)
-     DG06(:,:,:) = SAVE_UR(nb_iter/inter_order,:,:,:)
-  else
-     write(num,'(I6.6)')nb_iter
-     filename = trim(base_save)//num//'.h5'
-     CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06)
-  end if
-  
-  UAM1=UA
-  UZM1=UZ
-  URM1=UR
-  
-  CALL dealiazing(ua,uz,ur)
-  CALL dealiazing(DG04,DG05,DG06)
-  
-  DG10 = DG04 + PRM_A*R + PRM_B/R
-     
-  CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
-       A, Z, R, OPA, OPZ, OPR, DG10, DG05, DG06, UA, UZ, UR, NLAM1, NLZM1, NLRM1,&
-          DG01, DG02, DG03, DG07, DG08, DG09)
-  
-  DG10 = PRM_A*R + PRM_B/R
-  DG14 = 0._DP
-  
-  CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
-       A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14, UA, UZ, UR, DG11, DG12, DG13,&
-       DG01, DG02, DG03, DG07, DG08, DG09)
-  
-  NLAM1 = NLAM1 - DG11
-  NLZM1 = NLZM1 - DG12
-  NLRM1 = NLRM1 - DG13
-  
-  !     DG10 = PRM_A*R + PRM_B/R
-     
-  !     NLAM1 = NLAM1 + 2._DP*DG10*UA/R
-  
-  DO IT_time=1,nb_iter
-        
-     tc = tc + dt
-     snap_dt = snap_dt + dt
-     
-     starttime = MPI_Wtime();
-     
-     ! Récuperation de U(t),V(t) et W(t)
-     if (memoire) then
-        !           DG04 = SAVE_UA(nb_iter-it_time+1,:,:,:)
-!           DG05 = SAVE_UZ(nb_iter-it_time+1,:,:,:)
-        !           DG06 = SAVE_UR(nb_iter-it_time+1,:,:,:)
-        
-        CALL INTERPOLATION(inter_order,SAVE_UA(FLOOR((nb_iter-it_time)/real(inter_order))+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/real(inter_order))+1,:,:,:), MOD(it_time+1,inter_order), DG04)
-        CALL INTERPOLATION(inter_order,SAVE_UZ(FLOOR((nb_iter-it_time)/real(inter_order))+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/real(inter_order))+1,:,:,:), MOD(it_time+1,inter_order), DG05)
-        CALL INTERPOLATION(inter_order,SAVE_UR(FLOOR((nb_iter-it_time)/real(inter_order))+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/real(inter_order))+1,:,:,:), MOD(it_time+1,inter_order), DG06)
-     end if
-     
-     
-     CALL GRAD(A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
-     
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
-     
-     UAM1=UA
-     UZM1=UZ
-     URM1=UR
-     
-     CALL dealiazing(ua,uz,ur)
-     CALL dealiazing(DG04,DG05,DG06)
-     
-     DG10 = DG04 + PRM_A*R + PRM_B/R
-     
-     CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
-          A, Z, R, OPA, OPZ, OPR, DG10, DG05, DG06, UA, UZ, UR , NLA, NLZ, NLR,&
-          DG01, DG02, DG03, DG07, DG08, DG09)
-     
-     DG10 = PRM_A*R + PRM_B/R
-     DG14 = 0._DP
-     
-     CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS_CYL(&
-          A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14, UA, UZ, UR , DG11, DG12, DG13,&
-          DG01, DG02, DG03, DG07, DG08, DG09)
-
-     
-     
-     !       DG10 = PRM_A*R + PRM_B/R
-     
-     !       NLA = NLA + 2._DP*DG10*UA/R
-     
-     CALL OPA%D1(UA,SFI)
-     DG01 = -NU*(-2._DP/R**2)*SFI
-     CALL OPA%D1(UR,SFI)
-     DG02 = -NU*(+2._DP/R**2)*SFI
-     
-     NLR = NLR - DG01 - DG13
-     NLA = NLA - DG02 - DG12
-     NLZ = NLZ - DG12
-     
-     SA = SA - 2._DP*NLA + NLAM1 
-     SZ = SZ - 2._DP*NLZ + NLZM1 
-     SR = SR - 2._DP*NLR + NLRM1
-     
-     NLAM1 = NLA
-     NLZM1 = NLZ
-     NLRM1 = NLR
-     
-     SIGMA = 1.5_DP/DT
-        
-     CALL EQN_UA_AD%SOLVE(UA, SA, SIGMA ,PH)
-     CALL EQN_UZ_AD%SOLVE(UZ, SZ, SIGMA ,PH)
-     CALL EQN_UR_AD%SOLVE(UR, SR, SIGMA ,PH)
-        
-        
-     call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
-     SFI = SFI*1.5_DP/DT
-     
-     call EQN_FI_AD%SOLVE(FI,SFI,0._DP,PH)
-        
-     CALL GRAD(A,Z,R,OPA, OPZ, OPR, FI, DG01, DG02, DG03)
-        
-     PRES = PRES + FI
-        
-        
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UA(I,J,K) = UA(I,J,K) - DG01(I,J,K) * 2._DP*DT/3._DP 
-     END FORALL
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UZ(I,J,K) = UZ(I,J,K) - DG02(I,J,K) * 2._DP*DT/3._DP 
-     END FORALL
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * 2._DP*DT/3._DP 
-     END FORALL
-     
-     
-     ! check divergence 
-     call DIV( A,Z,R,OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
-     is = get_is()
-     ie = get_ie()
-     DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))     
-     CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-     endtime   = MPI_Wtime();
-     endtime =  endtime-starttime
-     CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-     
-     call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime
-     
-     if (cfl .GT. 10.) exit
-     
-     
-  end DO
-  
-  !projection du gradient pour divegence nulle.
-  call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
-  
-  call EQN_FI_AD%SOLVE(FI,SFI,0._DP,PH)
-  
-  CALL GRAD(A,Z,R,OPA, OPZ, OPR, FI, DG01, DG02, DG03)
-  
-  UA = UA - DG01
-  UZ = UZ - DG02
-  UR = UR - DG03
-
-  call DIV( A,Z,R,OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
-  is = get_is()
-  ie = get_ie()
-  DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))     
-  CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-  if (nrank==0) print*,"Div Grad J = ",div_max 
-  
-  !Randomising a noised U0
-   
-  IS = GET_IS()
-  IE = GET_IE()
-   
-  NOISE_UA = 0._DP
-  NOISE_UZ = 0._DP
-  NOISE_UR = 0._DP
-   
-  CALL RANDOM_SEED()
-  CALL Random_Number(NOISE_UA(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
-  CALL Random_Number(NOISE_UZ(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
-  CALL Random_Number(NOISE_UR(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
-   
-  NOISE = 1._DP
-  
-  NOISE_UA = (2._dp*NOISE_UA - 1._dp)*NOISE
-  NOISE_UZ = (2._dp*NOISE_UZ - 1._dp)*NOISE
-  NOISE_UR = (2._dp*NOISE_UR - 1._dp)*NOISE
-
-  CALL IMPORT_HDF5_INIT("1Z_RE_1000_HR/cond_init/init_3.h5",DUA_0,DUZ_0,DUR_0)
-  
-!  DG01 = UA_0!NOISE_UA
-!  DG02 = UZ_0!NOISE_UZ
-!  DG03 = UR_0!NOISE_UR
-   
-   
-!  call  normalize(quad,DG01,DUA_0,PH,N)
-!  call  normalize(quad,DG02,DUZ_0,PH,N)
-!  call  normalize(quad,DG03,DUR_0,PH,N)
-
-  
-  
-  !Saving the gradient computed by adjoint method
-  
-  FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
-     DJ_UA_ADJ(I,J,K) = UA(I,J,K)*DUA_0(I,J,K)*R(I,J,K)
-     DJ_UZ_ADJ(I,J,K) = UZ(I,J,K)*DUZ_0(I,J,K)*R(I,J,K)
-     DJ_UR_ADJ(I,J,K) = UR(I,J,K)*DUR_0(I,J,K)*R(I,J,K)
-  END FORALL
-   
-   
-!  CALL get_quadrature_hhi(quad,DJ_UA_ADJ,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DJ_UZ_ADJ,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DJ_UR_ADJ,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-   
-!  DJ_ADJ =  DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3))
-
-
-  call integrate_volume(DJ_UA_ADJ,A_tot,Z_tot,R_tot,vol)
-  DJ_ADJ = VOL
-  call integrate_volume(DJ_UZ_ADJ,A_tot,Z_tot,R_tot,vol)
-  DJ_ADJ = VOL + DJ_ADJ
-  call integrate_volume(DJ_UR_ADJ,A_tot,Z_tot,R_tot,vol)
-  DJ_ADJ = VOL + DJ_ADJ
-  
-  
-  if (rank == 0) then
-     write(6,'("--------------------------------------")')
-     write(6,'("    Computing J(U0 + EPS*DU0)")')
-     write(6,'("--------------------------------------")')
-  end if
-
-   
-  UA = (1.+EPS)*UA_0 !+ EPS*UA_0
-  UZ = (1.+EPS)*UZ_0 !+ EPS*UZ_0
-  UR = (1.+EPS)*UR_0 !+ EPS*UR_0
-  
-  PRES=0._DP
-  dt = - dt
-  tc = 0
-
-  SA = UA/DT
-  SZ = UZ/DT
-  SR = UR/DT
-
-
-  UAM1=UA
-  UZM1=UZ
-  URM1=UR
-  
-  CALL dealiazing(ua,uz,ur)
-  
-  DG10 = UA + PRM_A*R + PRM_B/R
-  
-  CALL COMPUTE_NON_LINEAR_TERMS(&
-       A, Z, R, OPA, OPZ, OPR, DG10, UZ, UR , NLAM1, NLZM1, NLRM1,&
-       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-  DG10 = PRM_A*R + PRM_B/R
-  DG14 = 0._DP
-  
-  CALL COMPUTE_NON_LINEAR_TERMS(&
-       A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
-       DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-  NLA = NLAM1 - DG11
-  NLZ = NLZM1 - DG12
-  NLR = NLRM1 - DG13
-
-  TC = dt
-
-  CALL OPA%D1(UA,SFI)
-  DG01 = NU*(-2._DP/R**2)*SFI
-  CALL OPA%D1(UR,SFI)
-  DG02 = NU*(+2._DP/R**2)*SFI
-
-  NLR = NLR - DG01 
-  NLA = NLA - DG02 
-  NLZ = NLZ 
-     
-  SA = SA - NLA 
-  SZ = SZ - NLZ 
-  SR = SR - NLR
-     
-  NLAM1 = NLA
-  NLZM1 = NLZ
-  NLRM1 = NLR
-
-  SIGMA = 1._DP/DT
-
-  CALL EQN_UA%SOLVE(UA, SA, SIGMA ,PH)
-  CALL EQN_UZ%SOLVE(UZ, SZ, SIGMA ,PH)
-  CALL EQN_UR%SOLVE(UR, SR, SIGMA ,PH)
-        
-        
-  call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
-  SFI = SFI/DT
-
-  call EQN_FI%SOLVE(FI,SFI,0._DP,PH)
-        
-  CALL GRAD(A, Z, R, OPA, OPZ, OPR, FI, DG01, DG02, DG03)
-        
-  PRES = FI
-        
-        
-  is = get_is_b([0,0,0])
-  ie = get_ie_b([0,0,0])
-  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-     UA(I,J,K) = UA(I,J,K) - DG01(I,J,K) * DT
-  END FORALL
-  is = get_is_b([0,0,0])
-  ie = get_ie_b([0,0,0])
-  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-     UZ(I,J,K) = UZ(I,J,K) - DG02(I,J,K) * DT 
-  END FORALL
-  is = get_is_b([0,0,0])
-  ie = get_ie_b([0,0,0])
-  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-     UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * DT 
-  END FORALL
-
-  
-  !Calcul de J(u) = int_domaine <u,u> + <t,t>
-  DG04 = UA*UA*R
-  DG05 = UZ*UZ*R
-  DG06 = UR*UR*R
-
-!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-
-  
-!  J_DU0 = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT
-
-  call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-  J_DU0 = VOL*DT 
-  call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
-  J_DU0 = VOL*DT + J_DU0
-  call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
-  J_DU0 = VOL*DT + J_DU0
-
-  
-
-  ! check divergence 
-  call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
-  is = get_is()
-  ie = get_ie()
-  DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))
-  CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-  
-  endtime   = MPI_Wtime();
-  endtime =  endtime-starttime
-  CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-  
-  call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-  it_time = 1
-  if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
-  
-    
-  DO IT_time=2,nb_iter
-     
-     tc = tc + dt
-     snap_dt = snap_dt + dt
-     
-     starttime = MPI_Wtime();
-        
-     CALL GRAD( A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
-     
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
-     
-     UAM1=UA
-     UZM1=UZ
-     URM1=UR
-
-     CALL dealiazing(ua,uz,ur)
-     
-     DG10 = UA + PRM_A*R + PRM_B/R
-
-     CALL COMPUTE_NON_LINEAR_TERMS(&
-          A, Z, R, OPA, OPZ, OPR, DG10, UZ, UR, NLA, NLZ, NLR,&
-          DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-     DG10 = PRM_A*R + PRM_B/R
-     DG14 = 0._DP
-  
-     CALL COMPUTE_NON_LINEAR_TERMS(&
-          A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
-          DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
-     CALL OPA%D1(UA,SFI)
-     DG01 = NU*(-2._DP/R**2)*SFI
-     CALL OPA%D1(UR,SFI)
-     DG02 = NU*(+2._DP/R**2)*SFI
-
-     NLR = NLR - DG01 - DG13
-     NLA = NLA - DG02 - DG11
-     NLZ = NLZ - DG12
-     
-     SA = SA - 2._DP*NLA + NLAM1 
-     SZ = SZ - 2._DP*NLZ + NLZM1 
-     SR = SR - 2._DP*NLR + NLRM1
-     
-     NLAM1 = NLA
-     NLZM1 = NLZ
-     NLRM1 = NLR
-
-     SIGMA = 1.5_DP/DT
-
-     CALL EQN_UA%SOLVE(UA, SA, SIGMA ,PH)
-     CALL EQN_UZ%SOLVE(UZ, SZ, SIGMA ,PH)
-     CALL EQN_UR%SOLVE(UR, SR, SIGMA ,PH)
-        
-        
-     call DIV( A, Z, R, OPA, OPZ, OPR, UA, UZ, UR, SFI, dg01, dg02 , dg03 )
-     SFI = SFI*1.5_DP/DT
-
-     call EQN_FI%SOLVE(FI,SFI,0._DP,PH)
-        
-     CALL GRAD(A, Z, R, OPA, OPZ, OPR, FI, DG01, DG02, DG03)
-        
-     PRES = PRES + FI
-        
-        
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UA(I,J,K) = UA(I,J,K) - DG01(I,J,K) * 2._DP*DT/3._DP
-     END FORALL
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UZ(I,J,K) = UZ(I,J,K) - DG02(I,J,K) * 2._DP*DT/3._DP 
-     END FORALL
-     is = get_is_b([0,0,0])
-     ie = get_ie_b([0,0,0])
-     FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
-        UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * 2._DP*DT/3._DP 
-     END FORALL
-  
-     
-     ! check divergence 
-     call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
-     is = get_is()
-     ie = get_ie()
-     DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))
-     CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-     endtime   = MPI_Wtime();
-     endtime =  endtime-starttime
-     CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-     
-     !Calcul de J(u) = int_domaine <u,u> + <t,t>
-     DG04 = UA*UA*R
-     DG05 = UZ*UZ*R
-     DG06 = UR*UR*R
-
-!     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-!     J_DU0 = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT + J_DU0
-
-     
-     call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-     J_DU0 = VOL*DT +J_DU0
-     call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
-     J_DU0 = VOL*DT + J_DU0
-     call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
-     J_DU0 = VOL*DT + J_DU0
-
-
-     
-     call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_DU0
-
-     if (cfl .GT. 10.) then
-        if (rank == 0) print'("CFL TOO BIG.")'
-        call MPI_FINALIZE(ierr)
-        stop
-     end if
-
-     if (tc>=tmax) exit
-     
-  end DO
-
-
-  
-  RES = ABS(DJ_ADJ - (J_DU0 - J_U)/EPS)
-  
-  if (rank==0)  then 
-     write(6,'("Erreur :",e15.8)')RES
-     write(6,'("Erreur relative : ",F9.1," %")')100.*ABS(RES/((J_DU0 - J_U)/EPS))
-     write(6,'(" <DJ;pertubation> : ",E15.8)')DJ_ADJ
-     write(6,'(" J EPSILON : ",E15.8)')(J_DU0 - J_U)/EPS
-     write(6,'(" J(U0+Pertubation) : ",E15.8)')J_DU0
-     write(6,'(" J(U0) : ",E15.8)')J_U
-     write(6,'(" EPSILON : ",E15.8)')EPS
-     write(6,parameters_physical)
-     
-  end if
-
-  
-  
-  CALL MPI_FINALIZE(ierr)
-
-  STOP
 
   
 contains
@@ -1420,6 +852,8 @@ contains
     call alloc_y(DGA_Y , OPT_GLOBAL=.TRUE.) ; DGA_Y = 0._DP
     call alloc_y(DGZ_Y , OPT_GLOBAL=.TRUE.) ; DGZ_Y = 0._DP
     call alloc_y(DGR_Y , OPT_GLOBAL=.TRUE.) ; DGR_Y = 0._DP
+
+    call alloc_z(DGA_Z , OPT_GLOBAL=.TRUE.) ; DGA_Z = 0._DP
    
     call alloc_x(DG01 , OPT_GLOBAL=.TRUE.) ; DG01 = 0
     call alloc_x(DG02 , OPT_GLOBAL=.TRUE.) ; DG02 = 0
@@ -1483,6 +917,8 @@ contains
     call alloc_x(NLAM1  , OPT_GLOBAL=.TRUE.) ; NLAM1 = 0._DP
     call alloc_x(NLZM1  , OPT_GLOBAL=.TRUE.) ; NLZM1 = 0._DP
     call alloc_x(NLRM1  , OPT_GLOBAL=.TRUE.) ; NLRM1 = 0._DP
+
+    ALLOCATE(VOL_AZ(PH%ZST(1):PH%ZEN(1),PH%ZST(2):PH%ZEN(2)))
     
     FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
        A(I,J,K) = MSH(1)%X(I)
@@ -1699,61 +1135,5 @@ contains
     
   end subroutine dealiazing
 
-  subroutine integrate_volume(U, X, Y, Z, integral)
-    
-    implicit none
-    real(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in)  :: U,X,Y,Z
-    real(DP), allocatable  :: dx(:), dy(:), dz(:)
-    integer               :: i, j, k
-    REAL(DP) :: integral
-    
-    allocate(dx(1:N(1)+1), dy(1:N(2)+1), dz(1:N(3)+1))
-    
-    ! --- Pas locaux : différences centrées + demi-cellule aux bords ---
-
-    ! Direction X
-
-    dx(1)  = 0.5_DP *  (X(2,1,1) - X(1,1,1))
-    dx(N(1)+1) = 0.5_DP * (X(N(1)+1,1,1) - X(N(1),1,1))
-    
-    do i = 2, N(1)
-       dx(i) = 0.5d0 * (X(i+1,1,1) - X(i-1,1,1))
-    end do
-
-    ! Direction Y
-
-    dy(1)  = 0.5_DP * (Y(1,2,1) - Y(1,1,1))
-    dy(N(2)+1) = 0.5_DP * (Y(1,N(2)+1,1)  - Y(1,N(2),1) )
-    
-    do j = 2, N(2)
-       dy(j) = 0.5d0 * (Y(1,j+1,1) - Y(1,j-1,1))
-    end do
-
-    ! Direction Z
-
-    dz(1)  = 0.5_DP * (Z(1,1,2) - Z(1,1,1))
-    dz(N(3)+1) = 0.5_DP * (Z(1,1,N(3)+1) - Z(1,1,N(3)))
-    
-    do k = 2, N(3)
-       dz(k) = 0.5d0 * (Z(1,1,k+1) - Z(1,1,k-1))
-    end do
-
-    ! --- Sommation pondérée (boucle i en interne : mémoire contiguë) ---
-    integral = 0.0d0
-    do k = PH%XST(3), PH%XEN(3)
-       do j = PH%XST(2), PH%XEN(2)
-          do i = PH%XST(1), PH%XEN(1)
-             integral = integral + U(i,j,k) * dx(i) * dy(j) * dz(k)
-          end do
-       end do
-    end do
-
-    integral = integral * (N(2)+2)/(N(2)+1)
-    
-    CALL MPI_ALLREDUCE(MPI_IN_PLACE,integral,1,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
-    
-    deallocate(dx, dy, dz)
-    
-  end subroutine integrate_volume
   
 end program tcheby_1d

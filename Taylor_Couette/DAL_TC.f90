@@ -381,18 +381,7 @@ program tcheby_1d
   CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
   J_U = integ + J_U
   
-!  call integrate_volume(DG04,A_tot,Z_tot,R_tot,integ)
-!  J_U = integ
-!  call integrate_volume(DG05,A_tot,Z_tot,R_tot,integ)
-!  J_U = integ + J_U
-!  call integrate_volume(DG06,A_tot,Z_tot,R_tot,integ)
-!  J_U = integ +J_U
-!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-  
-!  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
-
+  if (nrank==0) write(42,*)dt,-J_U
   
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
@@ -519,20 +508,6 @@ program tcheby_1d
      J_U = integ + J_U
 
      
-     !  call integrate_volume(DG04,A_tot,Z_tot,R_tot,integ)
-     !  J_U = integ + J_U
-     !  call integrate_volume(DG05,A_tot,Z_tot,R_tot,integ)
-     !  J_U = integ + J_U
-     !  call integrate_volume(DG06,A_tot,Z_tot,R_tot,integ)
-     !  J_U = integ + J_U
-     
-     !     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     !     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     !     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-     !     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))
-     
-     
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
 
@@ -548,7 +523,7 @@ program tcheby_1d
         end if
      end if
 
-     if (nrank==0) write(42,*)dt,J_U
+     if (nrank==0) write(42,*)dt,-J_U
 
 
      if (cfl .GT. 10.) then
@@ -652,9 +627,6 @@ program tcheby_1d
      NLZM1 = NLZM1 - DG12
      NLRM1 = NLRM1 - DG13
      
-!     DG10 = PRM_A*R + PRM_B/R
-     
-!     NLAM1 = NLAM1 + 2._DP*DG10*UA/R
 
      DO IT_time=1,nb_iter
         
@@ -665,10 +637,6 @@ program tcheby_1d
         
         ! Récuperation de U(t),V(t) et W(t)
         if (memoire) then
-!           DG04 = SAVE_UA(nb_iter-it_time+1,:,:,:)
-!           DG05 = SAVE_UZ(nb_iter-it_time+1,:,:,:)
-!           DG06 = SAVE_UR(nb_iter-it_time+1,:,:,:)
-
            CALL INTERPOLATION(2,SAVE_UA(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UA(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG04)
            CALL INTERPOLATION(2,SAVE_UZ(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UZ(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG05)
            CALL INTERPOLATION(2,SAVE_UR(FLOOR((nb_iter-it_time)/2._DP)+1,:,:,:), SAVE_UR(CEILING((nb_iter-it_time)/2._DP)+1,:,:,:), MOD(it_time+1,2), DG06)
@@ -678,9 +646,9 @@ program tcheby_1d
         CALL GRAD(A,Z,R, &
              OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
         
-        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
-        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
-        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
+        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 + 2._DP*DG04
+        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 + 2._DP*DG05
+        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 + 2._DP*DG06
 
         UAM1=UA
         UZM1=UZ
@@ -714,7 +682,7 @@ program tcheby_1d
         DG02 = -NU*(+2._DP/R**2)*SFI
      
         NLR = NLR - DG01 - DG13
-        NLA = NLA - DG02 - DG12
+        NLA = NLA - DG02 - DG11
         NLZ = NLZ - DG12
         
         SA = SA - 2._DP*NLA + NLAM1 
@@ -796,7 +764,7 @@ program tcheby_1d
      DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))     
      CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
      if (nrank==0) print*,"Div Grad J = ",div_max 
-     
+
      !Ecriture du gradient
      FILENAME = TRIM(root_dir)//'grad.h5'
      call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)

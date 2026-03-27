@@ -12,8 +12,8 @@ nb_cpu_z = 4
 
 
 &parameters_physical
-RE = 1 ,
-EPS = 1E-7
+RE = 1000 ,
+EPS = 0.32
 /
 
 &parameters_initial_condition
@@ -24,7 +24,7 @@ nr0 = 2 ,
 
 &parameters_timescheme
 tmax = 1 ,
-dt = 0.03125E-2 ,
+dt = 1E-5 ,
 root_dir = 'outdir/'
 resume = F,
 /
@@ -32,7 +32,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = '1Z_RE_1000_HR/cond_init/init_5.h5'
+init_file = 'Data/V2_RE_3000_1Z/cond_init/init_28.h5'
 /
 
 

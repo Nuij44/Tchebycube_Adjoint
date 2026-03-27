@@ -1,7 +1,8 @@
 module m_discr_tcheby
   use m_mesh_base
   use m_fourier_transform
-
+  use m_numerics
+  
   implicit none
 
   type t_discr_tcheby
@@ -48,7 +49,6 @@ contains
     real(dp) :: c_i,c_j
     real(dp),allocatable :: nu(:)
     real(dp), allocatable:: d(:,:),d_tilde(:,:)
-    
     ! penser à décaler les 0:n -> is:ie
 
 

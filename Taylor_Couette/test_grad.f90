@@ -42,7 +42,7 @@ program tcheby_1d
   real(kind=8) :: dirichl(2),neumann(2)
   integer :: n(3),cpu_grid(2),ierr
   REAL(kind=8) ::  xmin(3), xmax(3),err
-  REAL(kind=8) ::  tc
+  REAL(kind=8) ::  tc,norme_U0
 
   TYPE(DECOMP_INFO) :: ph
   
@@ -104,7 +104,7 @@ program tcheby_1d
   LOGICAL :: memoire = .TRUE.
   LOGICAL :: do_adj = .FALSE.
 
-  INTEGER, parameter :: inter_order = 1
+  INTEGER, parameter :: inter_order = 2
   
   call mpi_init(ierr)
   CALL H5OPEN_F(IERR)
@@ -245,19 +245,8 @@ program tcheby_1d
   
   call preproc()
 
-  DG01 = R!1._DP
-
-
-  
-  call integrate_volume(DG01,A_tot,Z_tot,R_tot,vol)
-
-  print*,'rang : ',nrank,' Volume : ',vol,vol/pi
-
-!  if (nrank==0) print*,A_tot(:,1,1)
-  !if (nrank==0) print*,Z_tot(1,:,1)
- ! if (nrank==0) print*,R_tot(1,1,:)
-  
-  
+  if (nrank == 0)print*,'Preprocessing done'
+ 
    UA = UA_0
    UZ = UZ_0
    UR = UR_0
@@ -267,6 +256,8 @@ program tcheby_1d
       ALLOCATE(SAVE_UA(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UA = 0._DP
       ALLOCATE(SAVE_UZ(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UZ = 0._DP
       ALLOCATE(SAVE_UR(0:nb_iter/inter_order,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_UR = 0._DP
+
+      if (nrank == 0)print*,'Save Allocated'
       
       SAVE_UA(0,:,:,:) = UA(:,:,:)
       SAVE_UZ(0,:,:,:) = UZ(:,:,:)
@@ -288,7 +279,7 @@ program tcheby_1d
   UZM1=UZ
   URM1=UR
   
-  CALL dealiazing(ua,uz,ur)
+!  CALL dealiazing(ua,uz,ur)
   
   DG10 = UA + PRM_A*R + PRM_B/R
   
@@ -377,9 +368,6 @@ program tcheby_1d
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
-!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
 
   call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
   J_U = VOL*DT
@@ -387,9 +375,8 @@ program tcheby_1d
   J_U = VOL*DT + J_U
   call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
   J_U = VOL*DT + J_U
-!  J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT
 
-  
+    
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
   is = get_is()
@@ -425,7 +412,7 @@ program tcheby_1d
      UZM1=UZ
      URM1=UR
 
-     CALL dealiazing(ua,uz,ur)
+!     CALL dealiazing(ua,uz,ur)
      
      DG10 = UA + PRM_A*R + PRM_B/R
 
@@ -439,15 +426,15 @@ program tcheby_1d
      CALL COMPUTE_NON_LINEAR_TERMS(&
           A, Z, R, OPA, OPZ, OPR, DG10, DG14, DG14 , DG11, DG12, DG13,&
           DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
-
+     
      CALL OPA%D1(UA,SFI)
      DG01 = NU*(-2._DP/R**2)*SFI
      CALL OPA%D1(UR,SFI)
      DG02 = NU*(+2._DP/R**2)*SFI
 
-     NLR = NLR - DG01 - DG13
      NLA = NLA - DG02 - DG11
      NLZ = NLZ - DG12
+     NLR = NLR - DG01 - DG13
      
      SA = SA - 2._DP*NLA + NLAM1 
      SZ = SZ - 2._DP*NLZ + NLZM1 
@@ -507,13 +494,6 @@ program tcheby_1d
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
 
-!     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-!     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT + J_U
-
-     
      call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
      J_U = VOL*DT + J_U
      call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
@@ -620,8 +600,8 @@ program tcheby_1d
   UZM1=UZ
   URM1=UR
   
-  CALL dealiazing(ua,uz,ur)
-  CALL dealiazing(DG04,DG05,DG06)
+!  CALL dealiazing(ua,uz,ur)
+!  CALL dealiazing(DG04,DG05,DG06)
   
   DG10 = DG04 + PRM_A*R + PRM_B/R
      
@@ -640,9 +620,6 @@ program tcheby_1d
   NLZM1 = NLZM1 - DG12
   NLRM1 = NLRM1 - DG13
   
-  !     DG10 = PRM_A*R + PRM_B/R
-     
-  !     NLAM1 = NLAM1 + 2._DP*DG10*UA/R
   
   DO IT_time=1,nb_iter
         
@@ -674,8 +651,8 @@ program tcheby_1d
      UZM1=UZ
      URM1=UR
      
-     CALL dealiazing(ua,uz,ur)
-     CALL dealiazing(DG04,DG05,DG06)
+!     CALL dealiazing(ua,uz,ur)
+!     CALL dealiazing(DG04,DG05,DG06)
      
      DG10 = DG04 + PRM_A*R + PRM_B/R
      
@@ -691,19 +668,15 @@ program tcheby_1d
           DG01, DG02, DG03, DG07, DG08, DG09)
 
      
-     
-     !       DG10 = PRM_A*R + PRM_B/R
-     
-     !       NLA = NLA + 2._DP*DG10*UA/R
-     
      CALL OPA%D1(UA,SFI)
      DG01 = -NU*(-2._DP/R**2)*SFI
      CALL OPA%D1(UR,SFI)
      DG02 = -NU*(+2._DP/R**2)*SFI
-     
-     NLR = NLR - DG01 - DG13
-     NLA = NLA - DG02 - DG12
+
+     NLA = NLA - DG02 - DG11
      NLZ = NLZ - DG12
+     NLR = NLR - DG01 - DG13
+
      
      SA = SA - 2._DP*NLA + NLAM1 
      SZ = SZ - 2._DP*NLZ + NLZM1 
@@ -799,13 +772,30 @@ program tcheby_1d
   CALL Random_Number(NOISE_UZ(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
   CALL Random_Number(NOISE_UR(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
    
-  NOISE = 1._DP
+  NOISE = 1e-4
   
   NOISE_UA = (2._dp*NOISE_UA - 1._dp)*NOISE
   NOISE_UZ = (2._dp*NOISE_UZ - 1._dp)*NOISE
   NOISE_UR = (2._dp*NOISE_UR - 1._dp)*NOISE
 
-  CALL IMPORT_HDF5_INIT("1Z_RE_1000_HR/cond_init/init_3.h5",DUA_0,DUZ_0,DUR_0)
+  CALL IMPORT_HDF5_INIT("Data/V2_RE_3000_1Z/cond_init/init_27.h5",DUA_0,DUZ_0,DUR_0)
+
+  DUA_0 = NOISE_UA + DUA_0
+  DUZ_0 = NOISE_UZ + DUA_0
+  DUR_0 = NOISE_UR + DUA_0
+
+!  DG01 = EPS*DUA_0
+!  DG02 = EPS*DUZ_0
+!  DG03 = EPS*DUR_0
+  
+  call integrate_volume(DUA_0,A_tot,Z_tot,R_tot,norme_U0)
+  call integrate_volume(DUZ_0,A_tot,Z_tot,R_tot,vol)
+  norme_U0 = VOL + norme_U0
+  call integrate_volume(DUR_0,A_tot,Z_tot,R_tot,vol)
+  norme_U0 = VOL + norme_U0
+  
+  if (nrank == 0 ) print*,"norme U0 :",norme_U0
+
   
 !  DG01 = UA_0!NOISE_UA
 !  DG02 = UZ_0!NOISE_UZ
@@ -826,13 +816,6 @@ program tcheby_1d
      DJ_UR_ADJ(I,J,K) = UR(I,J,K)*DUR_0(I,J,K)*R(I,J,K)
   END FORALL
    
-   
-!  CALL get_quadrature_hhi(quad,DJ_UA_ADJ,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DJ_UZ_ADJ,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DJ_UR_ADJ,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-   
-!  DJ_ADJ =  DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3))
-
 
   call integrate_volume(DJ_UA_ADJ,A_tot,Z_tot,R_tot,vol)
   DJ_ADJ = VOL
@@ -849,9 +832,9 @@ program tcheby_1d
   end if
 
    
-  UA = (1.+EPS)*UA_0 !+ EPS*UA_0
-  UZ = (1.+EPS)*UZ_0 !+ EPS*UZ_0
-  UR = (1.+EPS)*UR_0 !+ EPS*UR_0
+  UA = UA_0 + EPS*DUA_0
+  UZ = UZ_0 + EPS*DUZ_0
+  UR = UR_0 + EPS*DUR_0
   
   PRES=0._DP
   dt = - dt
@@ -866,7 +849,7 @@ program tcheby_1d
   UZM1=UZ
   URM1=UR
   
-  CALL dealiazing(ua,uz,ur)
+!  CALL dealiazing(ua,uz,ur)
   
   DG10 = UA + PRM_A*R + PRM_B/R
   
@@ -943,13 +926,6 @@ program tcheby_1d
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
-!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-
-  
-!  J_DU0 = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT
-
   call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
   J_DU0 = VOL*DT 
   call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
@@ -957,7 +933,6 @@ program tcheby_1d
   call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
   J_DU0 = VOL*DT + J_DU0
 
-  
 
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
@@ -994,7 +969,7 @@ program tcheby_1d
      UZM1=UZ
      URM1=UR
 
-     CALL dealiazing(ua,uz,ur)
+!     CALL dealiazing(ua,uz,ur)
      
      DG10 = UA + PRM_A*R + PRM_B/R
 
@@ -1076,13 +1051,6 @@ program tcheby_1d
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
 
-!     CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-!     CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
-     
-!     J_DU0 = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)))*DT + J_DU0
-
-     
      call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
      J_DU0 = VOL*DT +J_DU0
      call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
@@ -1105,18 +1073,18 @@ program tcheby_1d
      
   end DO
 
-
   
-  RES = ABS(DJ_ADJ - (J_DU0 - J_U)/EPS)
+  RES = ABS(DJ_ADJ - (J_DU0 - J_U)/(EPS*norme_U0))
+
   
   if (rank==0)  then 
      write(6,'("Erreur :",e15.8)')RES
-     write(6,'("Erreur relative : ",F9.1," %")')100.*ABS(RES/((J_DU0 - J_U)/EPS))
+     write(6,'("Erreur relative : ",F9.1," %")')100.*ABS(RES/((J_DU0 - J_U)/(eps*norme_U0)))
      write(6,'(" <DJ;pertubation> : ",E15.8)')DJ_ADJ
-     write(6,'(" J EPSILON : ",E15.8)')(J_DU0 - J_U)/EPS
+     write(6,'(" J(eps) - J / eps : ",E15.8)')(J_DU0 - J_U)/(eps*norme_U0)
      write(6,'(" J(U0+Pertubation) : ",E15.8)')J_DU0
      write(6,'(" J(U0) : ",E15.8)')J_U
-     write(6,'(" EPSILON : ",E15.8)')EPS
+     write(6,'(" EPSILON : ",E15.8)')EPS*norme_U0
      write(6,parameters_physical)
      
   end if
@@ -1371,6 +1339,8 @@ contains
        Z_tot(i,j,k) = MSH(2)%X(J)
        R_tot(i,j,k) = MSH(3)%X(K)
     END FORALL
+
+    if (nrank == 0)print*,'Allocation done'
     
     IS = GET_IS()
     IE = GET_IE()
@@ -1384,34 +1354,20 @@ contains
     CALL Random_Number(NOISE_UZ(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
     CALL Random_Number(NOISE_UR(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
     
-    NOISE = 1E-1
+    NOISE = 0._DP !1E-8
     
     UA = (2._dp*NOISE_UA - 1._dp)*NOISE
     UZ = (2._dp*NOISE_UZ - 1._dp)*NOISE
     UR = (2._dp*NOISE_UR - 1._dp)*NOISE
 
-    CALL IMPORT_HDF5_INIT("1Z_RE_1000_HR/cond_init/init_3.h5",UA,UZ,UR)
+    CALL IMPORT_HDF5_INIT("Data/V2_RE_3000_1Z/cond_init/init_27.h5",UA,UZ,UR)
 
-     DG04 = UA*UA*R
-     DG05 = UZ*UZ*R
-     DG06 = UR*UR*R
+    if (nrank == 0)print*,'Data imported'
+    
+    UA_0 = UA !+ NOISE_UA
+    UZ_0 = UZ !+ NOISE_UZ
+    UR_0 = UR !+ NOISE_UR
 
-     !call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-     !UA_0 = UA / VOL * 1E-4
-     !call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
-     !UZ_0 = UZ / VOL * 1E-4
-     !call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
-     !UR_0 = UR / VOL * 1E-4
-
-
-
-    ! CALL normalize(quad,UA,UA_0,PH,N)
-   ! CALL normalize(quad,UZ,UZ_0,PH,N)
-   ! CALL normalize(quad,UR,UR_0,PH,N)
-
-    UA_0 = UA
-    UZ_0 = UZ
-    UR_0 = UR
     
   end subroutine preproc
 

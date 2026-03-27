@@ -8,7 +8,8 @@ module m_operator_tcheby
     type, extends(t_operator_base)    ::  t_operator_tcheby
        type(t_discr_tcheby) :: discr_d1 
        type(t_discr_tcheby) :: discr_d2 
-       type(t_discr_tcheby) :: discr_id 
+       type(t_discr_tcheby) :: discr_id
+       type(t_discr_tcheby) :: discr_i1 
      contains 
        procedure :: init_operator_tcheby => init_operator_tcheby
        procedure :: initialize => init_operator_tcheby
@@ -113,12 +114,10 @@ module m_operator_tcheby
       call this%discr_id%init_discr_tcheby(msh=mesh,opt=100)
       call this%discr_d1%init_discr_tcheby(msh=mesh,opt=101)
       call this%discr_d2%init_discr_tcheby(msh=mesh,opt=102)
-
-      
-      
-
-      
+      call this%discr_i1%init_discr_tcheby(msh=mesh,opt=201)
+         
     end subroutine init_operator_tcheby
+    
     
     subroutine t_operator_tcheby_d1(this,fi,dfi,dg1y,dg2y,dg1z,dg2z)
       implicit none

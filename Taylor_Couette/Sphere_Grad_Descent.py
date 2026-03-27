@@ -4,6 +4,8 @@ import numpy as np
 import copy
 from warnings import warn
 from scipy.optimize import linesearch as ls
+from scipy.optimize._linesearch import scalar_search_armijo
+from scipy.optimize._linesearch import scalar_search_wolfe2
 import lib_util as util
 class LineSearchWarning(RuntimeWarning):
     pass;
@@ -130,7 +132,7 @@ def LS_armijo_multiple(f, inner_prod, M_0, X_k, g_k, d_k,  old_fval, args_f=(), 
     for index,_ in enumerate(M_0):
         derphi0 += inner_prod(g_k[index],d_k[index],*args_IP,**kwargs_IP);
     
-    alpha, phi1 = ls.scalar_search_armijo(phi, phi0, derphi0, c1=c1, alpha0=alpha0)
+    alpha, phi1 = scalar_search_armijo(phi, phi0, derphi0, c1=c1, alpha0=alpha0)
     return alpha, fc[0], phi1;
 
 
@@ -245,22 +247,24 @@ def LS_wolfe_multiple(f, myfprime, inner_prod, M_0, X_k, g_k, d_k, old_fval=None
         
         #apply norm constraints
         for index,c_i in enumerate(M_0):
-            X_kp1[index]  = Update_vector(X_k[index],alpha1,d_k[index],c_i,inner_prod,args_IP,kwargs_IP); 
+            X_kp1[index]  = Update_vector(X_k[index],alpha1,d_k[index],c_i,inner_prod,args_IP,kwargs_IP);
         
         # Calculate the Euclidean gradient
         Nab_Jkp1 = fprime(X_kp1,*args_f,**kwargs_f)
         
         # Compute the tangent gradient and perform vector transport of d_k 
-        for index,_ in enumerate(M_0):
-            g_kp1[index] = tangent_vector(X_kp1[index],Nab_Jkp1[index],inner_prod,args_IP,kwargs_IP)
-            Tdkm1[index] = transport_vector(X_kp1[index],d_k[index],inner_prod,args_IP,kwargs_IP)
-            derphi1     += inner_prod(g_kp1[index],Tdkm1[index],*args_IP,**kwargs_IP); # Compute the derivate w.r.t alpha1
+        g_kp1[index] = tangent_vector(X_kp1[index],Nab_Jkp1[index],inner_prod,args_IP,kwargs_IP)
+        Tdkm1[index] = transport_vector(X_kp1[index],d_k[index],inner_prod,args_IP,kwargs_IP)
+        derphi1     += inner_prod(g_kp1[index],Tdkm1[index],*args_IP,**kwargs_IP); # Compute the derivate w.r.t alpha1
         
         # Store current tangent gradient for later use
         gval[0]  = g_kp1;
         gval_alpha[0] = alpha1;
 
-        return derphi1;    
+        print("size derphi",np.size(derphi1))
+        print("derphi",derphi1)
+        
+        return float(np.squeeze(derphi1));    
 
     # Compute the derivative w.r.t alpha at alpha=0    
     derphi0=0.    
@@ -270,7 +274,7 @@ def LS_wolfe_multiple(f, myfprime, inner_prod, M_0, X_k, g_k, d_k, old_fval=None
 
     extra_condition2 = None
 
-    alpha_star, phi_star, old_fval, derphi_star = ls.scalar_search_wolfe2(
+    alpha_star, phi_star, old_fval, derphi_star = scalar_search_wolfe2(
             phi, derphi, old_fval, old_old_fval, derphi0, c1, c2, amax,
             extra_condition2, maxiter=maxiter)
 
@@ -381,7 +385,7 @@ def Optimise_On_Multi_Sphere(X_0, M_0, f, myfprime, inner_prod, args_f = (), arg
 
     """
     iter=util.OptionValueD('iter',0,warn=False,**kwargs_f)
-    
+
     if LS == 'LS_wolfe': 
         LS = LS_wolfe_multiple;
     elif LS == 'LS_armijo':

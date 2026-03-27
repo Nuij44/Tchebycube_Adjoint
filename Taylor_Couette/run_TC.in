@@ -5,7 +5,7 @@ nr = 64 ,
 r_min = 1.0,
 r_max = 3.0,
 z_min = 0.0 ,
-z_max = 2.0 ,  
+z_max = 1.0 ,  
 nb_cpu_y = 20 ,
 nb_cpu_z = 16
 /
@@ -17,8 +17,8 @@ RE = 3000 ,
 
 
 &parameters_timescheme
-tmax = 30 ,
-dt = 1.5e-4 ,
+tmax = 1 ,
+dt = 1e-4 ,
 root_dir = 'data_fun/'
 resume = F,
 /
