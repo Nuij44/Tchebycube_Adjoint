@@ -5,8 +5,9 @@
 !src/
 !ThirdParty/
 !Taylor_Couette/
-!Enstrophy_TC
-!lin_TC
+!Enstrophy_TC/
+!lin_TC/
+!cheby-tools/
 
 #Whitelist des contenus
 !src/**
@@ -32,6 +33,8 @@
 !lin_TC/*.py
 !lin_TC/*.in
 !lin_TC/CMakeLists.txt
+
+!cheby-tools/*
 
 #Whitelist du .gitignore
 !.gitignore

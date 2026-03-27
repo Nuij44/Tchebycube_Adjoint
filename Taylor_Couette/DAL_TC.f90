@@ -646,9 +646,9 @@ program tcheby_1d
         CALL GRAD(A,Z,R, &
              OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
         
-        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 + 2._DP*DG04
-        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 + 2._DP*DG05
-        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 + 2._DP*DG06
+        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
+        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
+        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
 
         UAM1=UA
         UZM1=UZ
@@ -766,8 +766,13 @@ program tcheby_1d
      if (nrank==0) print*,"Div Grad J = ",div_max 
 
      !Ecriture du gradient
+     DG01 = -UA
+     DG02 = -UZ
+     DG03 = -UR
+     
      FILENAME = TRIM(root_dir)//'grad.h5'
-     call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
+!     call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
+     call save_hdf5(trim(FILENAME),MSH,DG01,DG02,DG03)
      
      CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
 
