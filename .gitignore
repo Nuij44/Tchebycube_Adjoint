@@ -34,7 +34,8 @@
 !lin_TC/*.in
 !lin_TC/CMakeLists.txt
 
-!cheby-tools/*
+!cheby-tools/spec_forge/
+!cheby-tools/spec_forge/*.py
 
 #Whitelist du .gitignore
 !.gitignore
