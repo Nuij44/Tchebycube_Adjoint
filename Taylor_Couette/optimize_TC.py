@@ -70,10 +70,10 @@ def write_init_h5(U,V,W,output_name):
     groupe_dump_init = outfile.create_group('dump')
 
     dump = outfile['/dump']
-
-    dump_u = dump.create_dataset(name='u1', data=U, dtype=np.float64)
-    dump_v = dump.create_dataset(name='u2', data=V, dtype=np.float64)
-    dump_w = dump.create_dataset(name='u3', data=W, dtype=np.float64)
+    
+    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
+    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
+    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
 
     outfile.close()
 ####################################################################################
@@ -177,7 +177,7 @@ def jac_tchebycube(vector, **kwargs):
     J = np.ravel(J2)
     #print("Jacobienne J2 :",J2)    
     os.system("rm -rf data_fun")
-    return grad_adj
+    return J,grad_adj
     
 ####################################################################################################
 def fun_tchebycubeS(Lvector, **kwargs):
@@ -187,10 +187,10 @@ def fun_tchebycubeS(Lvector, **kwargs):
 ####################################################################################################    
 def jac_tchebycubeS(Lvector, **kwargs):
     vector=Lvector[0]
-#    J,data_adj=jac_tchebycube(vector, **kwargs)
-#    return J,[data_adj]
-    data_adj=jac_tchebycube(vector, **kwargs)
-    return [data_adj]
+    J,data_adj=jac_tchebycube(vector, **kwargs)
+    return J,[data_adj]
+#    data_adj=jac_tchebycube(vector, **kwargs)
+#    return [data_adj]
 
 ####################################################################################################
 def prod_f90(x1,x2):

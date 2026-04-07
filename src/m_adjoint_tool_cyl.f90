@@ -176,6 +176,50 @@ module m_adjoint_tool_cyl
     
   END SUBROUTINE IMPORT_HDF5_INIT_BASIC
 
+    SUBROUTINE IMPORT_HDF5_INIT_SNAP(FILENAME,u1,u2,u3)
+    use decomp_2d
+    use m_mesh_base
+    use mpi
+    implicit none
+    CHARACTER(len=*)                          :: FILENAME
+    REAL(KIND=8),dimension(:,:,:),allocatable :: u1,u2,u3
+    
+    !> VARS...
+    INTEGER :: INFO,IERR
+    INTEGER(KIND=HID_T) :: P_ID, F_ID, X_ID
+    INTEGER, DIMENSION(3) :: IS_GLB,IE_GLB
+    INTEGER, DIMENSION(3) :: IS_LOC,IE_LOC
+    TYPE(DECOMP_INFO) :: ph
+    
+    CALL GET_DECOMP_INFO(PH)
+    
+    is_glb(1:3) = [ ph%xst(1) ,ph%yst(2) , ph%zst(3) ] 
+    ie_glb(1:3) = [ ph%xen(1) ,ph%yen(2) , ph%zen(3) ] 
+    
+    is_loc(1:3) = [ ph%xst(1) ,ph%xst(2) , ph%xst(3) ]
+    ie_loc(1:3) = [ ph%xen(1) ,ph%xen(2) , ph%xen(3) ] 
+    
+    
+    CALL MPI_INFO_CREATE( INFO, IERR )
+    CALL H5PCREATE_F( H5P_FILE_ACCESS_F, P_ID, IERR )
+    CALL H5PSET_FAPL_MPIO_F( P_ID, MPI_COMM_WORLD, INFO, IERR )
+    
+    CALL H5FOPEN_F(FILENAME, H5F_ACC_RDWR_F, F_ID, IERR,ACCESS_PRP = P_ID)
+    CALL H5PCREATE_F(H5P_DATASET_XFER_F, X_ID, IERR)
+    CALL H5PSET_DXPL_MPIO_F(X_ID, H5FD_MPIO_COLLECTIVE_F, IERR)
+    
+    
+    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u1',u1  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
+    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u2',u2  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
+    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u3',u3  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
+    
+    CALL H5PCLOSE_F( X_ID, IERR )
+    CALL H5FCLOSE_F( F_ID, IERR )
+    CALL H5PCLOSE_F( P_ID, IERR )
+    
+    
+  END SUBROUTINE IMPORT_HDF5_INIT_SNAP
+
   SUBROUTINE IMPORT_HDF5_INIT_STRAT(FILENAME,u1,u2,u3,T)
     use decomp_2d
     use m_mesh_base

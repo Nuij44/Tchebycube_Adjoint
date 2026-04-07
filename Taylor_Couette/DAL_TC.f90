@@ -167,7 +167,7 @@ program tcheby_1d
   OMEGA_I = 1._DP
   OMEGA_O = (r_max)**(-1.5_DP)
   
-  prm_A = (r_max/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
+  prm_A = (1._DP/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
   prm_B =(r_min**2/(1._DP - eta**2)) * (OMEGA_i - OMEGA_o) 
   
   nb_iter = floor(tmax/dt)
@@ -381,7 +381,7 @@ program tcheby_1d
   CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
   J_U = integ + J_U
   
-  if (nrank==0) write(42,*)dt,-J_U
+  if (nrank==0) write(42,*)dt,J_U
   
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
@@ -523,7 +523,7 @@ program tcheby_1d
         end if
      end if
 
-     if (nrank==0) write(42,*)dt,-J_U
+     if (nrank==0) write(42,*)dt,J_U
 
 
      if (cfl .GT. 10.) then
@@ -766,9 +766,9 @@ program tcheby_1d
      if (nrank==0) print*,"Div Grad J = ",div_max 
 
      !Ecriture du gradient
-     DG01 = -UA
-     DG02 = -UZ
-     DG03 = -UR
+     DG01 = UA
+     DG02 = UZ
+     DG03 = UR
      
      FILENAME = TRIM(root_dir)//'grad.h5'
 !     call save_hdf5(trim(FILENAME),MSH,UA,UZ,UR)
