@@ -57,12 +57,12 @@ def mean(list,r):
     A = -1.0/3.0
     B = 4.0/3.0
         
-    ua = ua 
+    ua = ua + A*r + B/r
     
     for i in range(2,np.size(list)):
         print("mean",i)
         h5d = h5.File(h5db+list[i], 'r')
-        ua = ua + np.transpose(h5d['/u1'][:,:,:]) 
+        ua = ua + np.transpose(h5d['/u1'][:,:,:]) + A*r + B/r
         uz = uz + np.transpose(h5d['/u2'][:,:,:])
         ur = ur + np.transpose(h5d['/u3'][:,:,:])
 
@@ -72,16 +72,17 @@ def mean(list,r):
 def RMS(h5list,r):
 
     mean_a,mean_z,mean_r = mean(h5list,r)
-    
+
+    A = -1.0/3.0
+    B = 4.0/3.0
+        
     #Computing fluctuation
     h5d = h5.File(h5db+h5list[1], 'r')
-    ua,uz,ur =     np.transpose(h5d['/u1'][:,:,:]), \
+    ua,uz,ur =     np.transpose(h5d['/u1'][:,:,:]) + A*r + B/r, \
                    np.transpose(h5d['/u2'][:,:,:]), \
                    np.transpose(h5d['/u3'][:,:,:])
     h5d.close()
 
-    A = -2.0/3.0
-    B = 4.0/3.0
     
     fa = np.square(ua - mean_a)
     fz = np.square(uz - mean_z)
@@ -89,7 +90,7 @@ def RMS(h5list,r):
     
     for i in range(2,np.size(list)):
         h5d = h5.File(h5db+list[i], 'r')
-        fa = fa + np.square(mean_a - np.transpose(h5d['/u1'][:,:,:]))
+        fa = fa + np.square(mean_a - np.transpose(h5d['/u1'][:,:,:]) + A*r + B/r)
         fz = fz + np.square(mean_z - np.transpose(h5d['/u2'][:,:,:]))
         fr = fr + np.square(mean_r - np.transpose(h5d['/u3'][:,:,:]))
 
@@ -138,6 +139,8 @@ if __name__ == "__main__":
 
     rms_a,rms_z,rms_r,mean_a,mean_z,mean_r = RMS(h5dlist[500:800],r)
 
+
+        
     #integration sans jaccobienne car on intégre seulement dans theta et z
     
     int_a = ops.integrate_x(rms_a)
