@@ -12,7 +12,7 @@ nb_cpu_z = 8
 
 
 &parameters_physical
-RE = 3000 ,
+RE = 10000 ,
 /
 
 &parameters_initial_condition
@@ -22,7 +22,7 @@ nr0 = 2 ,
 /
 
 &parameters_timescheme
-tmax = 250 ,
+tmax = 500 ,
 dt = 1e-3 ,
 root_dir = 'outdir/'
 resume = F,
@@ -31,7 +31,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = 'cond_init/init_28.h5'
+init_file = 'cond_init/init_25.h5'
 /
 
 

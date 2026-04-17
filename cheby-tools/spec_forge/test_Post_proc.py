@@ -54,8 +54,8 @@ def mean(list,r):
                    np.transpose(h5d['/u3'][:,:,:])
     h5d.close()
 
-    A = -1.0/3.0
-    B = 4.0/3.0
+    A = 0.0 #-1.0/3.0
+    B = 0.0 #4.0/3.0
         
     ua = ua 
     
@@ -84,9 +84,9 @@ def RMS(h5list,r):
     h5d.close()
 
     
-    fa = np.square(-ua  + mean_a)
-    fz = np.square(-uz + mean_z)
-    fr = np.square(-ur + mean_r)
+    fa = np.square(ua - mean_a)
+    fz = np.square(uz - mean_z)
+    fr = np.square(ur - mean_r)
     
     for i in range(1,np.size(list)):
         h5d = h5.File(h5db+list[i], 'r')
@@ -95,7 +95,7 @@ def RMS(h5list,r):
         fr = fr + np.square(mean_r - np.transpose(h5d['/u3'][:,:,:]))
 
     return fa/np.size(list),fz/np.size(list),fr/np.size(list),mean_a,mean_z,mean_r
-    
+   
 
 # ---- Main ----
 
@@ -132,13 +132,17 @@ if __name__ == "__main__":
     h5dlist.sort()
 
     #Kinetic energy of the flow
-    write_nrj(h5db,h5dlist[400:600],r,ops)
-#    exit()
+    #write_nrj(h5db,h5dlist[0:855],r,ops)
+    
     #Compute RMS
     print("Taille list:",np.size(h5dlist))
 
+    RMS_mean(h5dlist[600:700],r)
+
+    exit()
     
-    rms_a,rms_z,rms_r,mean_a,mean_z,mean_r = RMS(h5dlist[400:600],r)
+    
+    rms_a,rms_z,rms_r,mean_a,mean_z,mean_r = RMS(h5dlist[600:700],r)
 
 
         

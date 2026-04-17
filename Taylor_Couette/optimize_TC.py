@@ -71,9 +71,13 @@ def write_init_h5(U,V,W,output_name):
 
     dump = outfile['/dump']
     
-    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
-    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
-    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
+#    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
+#    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
+#    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
+    
+    dump_u = dump.create_dataset(name='u1', data=U, dtype=np.float64)
+    dump_v = dump.create_dataset(name='u2', data=V, dtype=np.float64)
+    dump_w = dump.create_dataset(name='u3', data=W, dtype=np.float64)
 
     outfile.close()
 ####################################################################################
@@ -365,7 +369,9 @@ if __name__ == '__main__':
     data_dns_start=[init_ua, init_uz, init_ur]
     vector_begin=normalization(data_dns_start, options.E0, prod)
 
-    x0 = [np.reshape(vector_begin[0], (N[0],N[1],N[2])),np.reshape(vector_begin[1], (N[0],N[1],N[2])),np.reshape(vector_begin[2], (N[0],N[1],N[2]))]
+    x0 = vector_begin
+    
+    #x0 = [np.reshape(vector_begin[0], (N[0],N[1],N[2])),np.reshape(vector_begin[1], (N[0],N[1],N[2])),np.reshape(vector_begin[2], (N[0],N[1],N[2]))]
     
     prod_value_start=prod(vector_begin,vector_begin)
     if (options.verbose) : print('Starting value of the scalar product='+str(prod_value_start))

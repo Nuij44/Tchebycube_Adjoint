@@ -164,12 +164,13 @@ program tcheby_1d
 
   eta = r_min/r_max
 
-  OMEGA_I = 1._DP
+  OMEGA_I = (r_min)**(-1.5_DP)
   OMEGA_O = (r_max)**(-1.5_DP)
   
   prm_A = (1._DP/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
   prm_B =(r_min**2/(1._DP - eta**2)) * (OMEGA_i - OMEGA_o) 
-  
+
+    
   nb_iter = floor(tmax/dt)
 
   if (rank == 0) print*,nb_iter
@@ -407,12 +408,12 @@ program tcheby_1d
      
      starttime = MPI_Wtime();
         
-     CALL GRAD( A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+!     CALL GRAD( A,Z,R, &
+!          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
+     SA = (2._DP*UA-0.5_DP*UAM1)/DT !- DG01 
+     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT !- DG02 
+     SR = (2._DP*UR-0.5_DP*URM1)/DT !- DG03
      
      UAM1=UA
      UZM1=UZ

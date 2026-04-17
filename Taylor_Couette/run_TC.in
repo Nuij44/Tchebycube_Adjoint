@@ -12,7 +12,7 @@ nb_cpu_z = 16
 
 
 &parameters_physical
-RE = 5000 ,
+RE = 10000 ,
 /
 
 

@@ -135,11 +135,13 @@ if __name__ == "__main__":
     ope = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, 1.0],
         xmax=[2*np.pi, np.pi, 2.0],
-        n=[197,129,96],
+        n=[128,65,128],
         bases=["fourier", "fourier","chebyshev"]
     )
-
-    h5d = h5.File(h5db+h5dlist[-2], 'r')
+    i=8
+    print(h5dlist[i])
+    
+    h5d = h5.File(h5db+h5dlist[i], 'r')
     ua,uz,ur =     np.transpose(h5d['/u1'][:,:,:]), \
                    np.transpose(h5d['/u2'][:,:,:]), \
                    np.transpose(h5d['/u3'][:,:,:])

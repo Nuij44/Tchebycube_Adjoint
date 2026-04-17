@@ -185,7 +185,7 @@ program tcheby_1d
   OMEGA_I = 1._DP
   OMEGA_O = (r_max)**(-1.5_DP)
   
-  prm_A = (r_max/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
+  prm_A = (1._DP/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
   prm_B =(r_min**2/(1._DP - eta**2)) * (OMEGA_i - OMEGA_o) 
 
   
@@ -225,7 +225,7 @@ program tcheby_1d
   CALL INIT_quadrature_hhi(quad,xmin,xmax,&
        ph%xst,ph%xen,na,ph%yst,ph%yen,nz,ph%zst,ph%zen,nr)
   
-  
+
   dirichl =  [1._DP,0._DP]
   neumann =  [0._DP,1._DP]
 
