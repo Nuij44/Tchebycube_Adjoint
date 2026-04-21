@@ -44,22 +44,21 @@ def OptionValueD(pattern, default, **kwargs):
 #########################################################################
 def read_grad_strat(str_file,type='float64'):
 
-    try:
-        file = h5py.File('./'+str_file, 'r')
-        grad_u1 = file['/save/u1'][()]
-        grad_u2 = file['/save/u2'][()]
-        grad_u3 = file['/save/u3'][()]
+    #    try:
+    file = h5py.File('./'+str_file, 'r')
+    grad_u1 = file['/u1'][()]
+    grad_u2 = file['/u2'][()]
+    grad_u3 = file['/u3'][()]
         
-        #transposition des données pour avoir un ordre colonne major
-        #data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
+    #transposition des données pour avoir un ordre colonne major
+    data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
         
-        #        data_read = [np.reshape(grad_u1, (N[0],N[1],N[2])),np.reshape(grad_u2, (N[0],N[1],N[2])),np.reshape(grad_u3, (N[0],N[1],N[2]))]
-        data_read = [grad_u1,grad_u2,grad_u3]
-    except: 
-        print("The current directory is "+os.getcwd())
-        print("%s is not inside this directory ?" % str_file) 
-        sys.exit(1)
-       
+    #        data_read = [np.reshape(grad_u1, (N[0],N[1],N[2])),np.reshape(grad_u2, (N[0],N[1],N[2])),np.reshape(grad_u3, (N[0],N[1],N[2]))]
+    #    except: 
+    #        print("The current directory is "+os.getcwd())
+    #        print("%s is not inside this directory ?" % str_file) 
+    #        sys.exit(1)
+
     return data_read
 ####################################################################################
 def write_init_h5(U,V,W,output_name):
@@ -71,14 +70,14 @@ def write_init_h5(U,V,W,output_name):
     groupe_dump_init = outfile.create_group('dump')
 
     dump = outfile['/dump']
-
-#    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
-#    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
-#    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
     
-    dump_u = dump.create_dataset(name='u1', data=U, dtype=np.float64)
-    dump_v = dump.create_dataset(name='u2', data=V, dtype=np.float64)
-    dump_w = dump.create_dataset(name='u3', data=W, dtype=np.float64)
+    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
+    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
+    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
+    
+#    dump_u = dump.create_dataset(name='u1', data=U, dtype=np.float64)
+#    dump_v = dump.create_dataset(name='u2', data=V, dtype=np.float64)
+#    dump_w = dump.create_dataset(name='u3', data=W, dtype=np.float64)
 
     outfile.close()
 ####################################################################################
@@ -129,7 +128,7 @@ def fun_tchebycube(vector, **kwargs):
  
     command_base="./"+options.exe_dir+"/DAL_TC.x --input "+input_dir+" --output-dir data_fun --init-data data_fun/init.h5 > resu_fun.txt"
 
-    command="srun -n "+str(nprocs)+" --cpu-bind=threads -- "+command_base                                                                
+    command="srun -n "+str(nprocs)+" "+command_base                                                                
     print(command)   
     
     os.system(command)
@@ -171,7 +170,7 @@ def jac_tchebycube(vector, **kwargs):
     #Run avec looping adjoint  et sauvegarde des iterations
     command_base="./"+options.exe_dir+"/DAL_TC.x --input "+input_dir+" --output-dir data_fun --init-data data_fun/init.h5 --do-adjoint > resu_jac_dns.txt"
 
-    command="srun -n "+str(nprocs)+" --cpu-bind=threads -- "+command_base
+    command="srun -n "+str(nprocs)+" "+command_base
     
     print(command)   
     os.system(command)
@@ -194,6 +193,8 @@ def jac_tchebycubeS(Lvector, **kwargs):
     vector=Lvector[0]
     J,data_adj=jac_tchebycube(vector, **kwargs)
     return J,[data_adj]
+#    data_adj=jac_tchebycube(vector, **kwargs)
+#    return [data_adj]
 
 ####################################################################################################
 def prod_f90(x1,x2):
@@ -215,7 +216,7 @@ def prod_f90(x1,x2):
 
     command_base=" "+options.exe_dir+"/prod.x --input "+input_dir+" > prod_scal.txt"
 
-    command="mpirun -np "+str(nprocs)+command_base                                                                
+    command="srun -n "+str(nprocs)+command_base                                                                
     os.system(command)
 
     f = open("prod_scal/Prod.dat",'r')
@@ -330,20 +331,26 @@ def options_parser():
 ############################################################################################
 if __name__ == '__main__':
 
+    data = read_grad_strat("test.h5")
 
+    print(data[0][2][0][0])
+
+    write_init_h5(data[0],data[0],data[0],'out.h5')
+    
+    exit()
+    
     beginning_time = time.time()
     options = options_parser()
     if (options.verbose) : print(vars(options))
     dict_options=vars(options)
 
 
+    #    prod=lambda x, y: lib_optimize.prodn(x, y, 4)
     prod=lambda x, y: prod_f90(x, y)
 
     #Initialisation à partir d'un random
     
-    N = [65, 37, 49]
-    N= [49,37,65]
-
+    N = [193, 65, 65]
     init_ua = 2.*np.random.random(N)-np.ones(N)
     init_uz = 2.*np.random.random(N)-np.ones(N)
     init_ur = 2.*np.random.random(N)-np.ones(N)
@@ -351,25 +358,27 @@ if __name__ == '__main__':
     os.system("mkdir -p "+options.output)    
 
 #    try:
-#        file = h5py.File('RE_2000/run2/cond_init/init_2.h5', 'r')
+#        file = h5py.File('Data/V2_RE_3000_1Z/cond_init/init_28.h5', 'r')
 #        init_ua = file['/dump/u1'][()]
 #        init_uz = file['/dump/u2'][()]
 #        init_ur = file['/dump/u3'][()]
-        
-        #transposition des données pour avoir un ordre colonne major
-        #data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
-        
-    data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
+        #init_ua = file['/u1'][()]
+        #init_uz = file['/u2'][()]
+        #init_ur = file['/u3'][()]
+                
+#        data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
 #    except: 
 #        print("The current directory is "+os.getcwd())
 #        print("%s is not inside this directory ?" % str_file) 
 #        sys.exit(1)
 
     
-#    data_dns_start=[init_ua, init_uz, init_ur]
+    data_dns_start=[init_ua, init_uz, init_ur]
     vector_begin=normalization(data_dns_start, options.E0, prod)
 
-    print("x0 shape : ",np.shape(vector_begin))
+    x0 = vector_begin
+    
+    #x0 = [np.reshape(vector_begin[0], (N[0],N[1],N[2])),np.reshape(vector_begin[1], (N[0],N[1],N[2])),np.reshape(vector_begin[2], (N[0],N[1],N[2]))]
     
     prod_value_start=prod(vector_begin,vector_begin)
     if (options.verbose) : print('Starting value of the scalar product='+str(prod_value_start))
@@ -384,7 +393,7 @@ if __name__ == '__main__':
                   err_tol=options.tol, alpha_k =options.alpha, LS = options.LS, CG = ConjGrad)
 
     else:
-        data_opt = lib_optimize.optimize_rotation(fun_tchebycube, vector_begin, jac_tchebycube, prod, 1, DnsAdj=True,**dict_options)
+        data_opt = lib_optimize.optimize_rotation(fun_tchebycube, x0, jac_tchebycube, prod, 1, **dict_options)
 
     print(data_opt)
 
@@ -395,4 +404,5 @@ if __name__ == '__main__':
     write_init_h5(data_opt.X_opt[0],data_opt.X_opt[1],data_opt.X_opt[2],options.output+"/init_opt.h5")
 
 #########################################################################################################
+
 

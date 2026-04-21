@@ -237,7 +237,19 @@ program tcheby_1d
   
   call preproc()
 
+  UA = 0._DP
+  UZ = 0._DP
+  UR = 0._DP
 
+
+!  CALL IMPORT_HDF5_INIT("out.h5",UA,UZ,UR)
+!  FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+!     DG01(I,J,K) = I-1 + (J-1)*10 + (K-1)*100 - UA(I,J,K)
+!  END FORALL
+
+!  print*,abs(DG01)
+!  stop
+  
   TC = 0._DP
 
   is = get_is_b([0,0,0])

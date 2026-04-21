@@ -174,7 +174,7 @@ program tcheby_1d
   OMEGA_I = 1._DP
   OMEGA_O = (r_max)**(-1.5_DP)
   
-  prm_A = (r_max/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
+  prm_A = (1._DP/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)
   prm_B =(r_min**2/(1._DP - eta**2)) * (OMEGA_i - OMEGA_o) 
   
   nb_iter = floor(tmax/dt)
@@ -368,12 +368,11 @@ program tcheby_1d
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
-
-  call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG04,vol,PH,NA,NZ,NR,xmax,xmin)
   J_U = VOL*DT
-  call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG05,vol,PH,NA,NZ,NR,xmax,xmin)
   J_U = VOL*DT + J_U
-  call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG06,vol,PH,NA,NZ,NR,xmax,xmin)
   J_U = VOL*DT + J_U
 
     
@@ -401,12 +400,12 @@ program tcheby_1d
      
      starttime = MPI_Wtime();
         
-     CALL GRAD( A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+!     CALL GRAD( A,Z,R, &
+!          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
+     SA = (2._DP*UA-0.5_DP*UAM1)/DT !- DG01 
+     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT !- DG02 
+     SR = (2._DP*UR-0.5_DP*URM1)/DT !- DG03
      
      UAM1=UA
      UZM1=UZ
@@ -494,11 +493,11 @@ program tcheby_1d
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
 
-     call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
+     CALL integrate_spec(quad,DG04,vol,PH,NA,NZ,NR,xmax,xmin)
      J_U = VOL*DT + J_U
-     call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
+     CALL integrate_spec(quad,DG05,vol,PH,NA,NZ,NR,xmax,xmin)
      J_U = VOL*DT + J_U
-     call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
+     CALL integrate_spec(quad,DG06,vol,PH,NA,NZ,NR,xmax,xmin)
      J_U = VOL*DT + J_U
      
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
@@ -640,12 +639,12 @@ program tcheby_1d
      end if
      
      
-     CALL GRAD(A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+!     CALL GRAD(A,Z,R, &
+!          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
+     SA = (2._DP*UA-0.5_DP*UAM1)/DT - 2._DP*DG04
+     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - 2._DP*DG05
+     SR = (2._DP*UR-0.5_DP*URM1)/DT - 2._DP*DG06
      
      UAM1=UA
      UZM1=UZ
@@ -787,13 +786,18 @@ program tcheby_1d
 !  DG01 = EPS*DUA_0
 !  DG02 = EPS*DUZ_0
 !  DG03 = EPS*DUR_0
+
+  DG04 = DUA_0*R!DUA_0*R
+  DG05 = DUZ_0*R!DUZ_0*R
+  DG06 = DUR_0*R!DUR_0*R
+
   
-  call integrate_volume(DUA_0,A_tot,Z_tot,R_tot,norme_U0)
-  call integrate_volume(DUZ_0,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG04,norme_U0,PH,NA,NZ,NR,xmax,xmin)
+  CALL integrate_spec(quad,DG05,vol,PH,NA,NZ,NR,xmax,xmin)
   norme_U0 = VOL + norme_U0
-  call integrate_volume(DUR_0,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG06,vol,PH,NA,NZ,NR,xmax,xmin)
   norme_U0 = VOL + norme_U0
-  
+  norme_U0 = abs(norme_U0)
   if (nrank == 0 ) print*,"norme U0 :",norme_U0
 
   
@@ -815,13 +819,12 @@ program tcheby_1d
      DJ_UZ_ADJ(I,J,K) = UZ(I,J,K)*DUZ_0(I,J,K)*R(I,J,K)
      DJ_UR_ADJ(I,J,K) = UR(I,J,K)*DUR_0(I,J,K)*R(I,J,K)
   END FORALL
-   
 
-  call integrate_volume(DJ_UA_ADJ,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DJ_UA_ADJ,vol,PH,NA,NZ,NR,xmax,xmin)
   DJ_ADJ = VOL
-  call integrate_volume(DJ_UZ_ADJ,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DJ_UZ_ADJ,vol,PH,NA,NZ,NR,xmax,xmin)
   DJ_ADJ = VOL + DJ_ADJ
-  call integrate_volume(DJ_UR_ADJ,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DJ_UR_ADJ,vol,PH,NA,NZ,NR,xmax,xmin)
   DJ_ADJ = VOL + DJ_ADJ
   
   
@@ -920,17 +923,16 @@ program tcheby_1d
      UR(I,J,K) = UR(I,J,K) - DG03(I,J,K) * DT 
   END FORALL
 
-  
   !Calcul de J(u) = int_domaine <u,u> + <t,t>
   DG04 = UA*UA*R
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
-  call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-  J_DU0 = VOL*DT 
-  call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG04,vol,PH,NA,NZ,NR,xmax,xmin)
+  J_DU0 = VOL*DT
+  CALL integrate_spec(quad,DG05,vol,PH,NA,NZ,NR,xmax,xmin)
   J_DU0 = VOL*DT + J_DU0
-  call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
+  CALL integrate_spec(quad,DG06,vol,PH,NA,NZ,NR,xmax,xmin)
   J_DU0 = VOL*DT + J_DU0
 
 
@@ -958,12 +960,12 @@ program tcheby_1d
      
      starttime = MPI_Wtime();
         
-     CALL GRAD( A,Z,R, &
-          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+!     CALL GRAD( A,Z,R, &
+!          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
+     SA = (2._DP*UA-0.5_DP*UAM1)/DT !- DG01 
+     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT !- DG02 
+     SR = (2._DP*UR-0.5_DP*URM1)/DT !- DG03
      
      UAM1=UA
      UZM1=UZ
@@ -1051,14 +1053,13 @@ program tcheby_1d
      DG05 = UZ*UZ*R
      DG06 = UR*UR*R
 
-     call integrate_volume(DG04,A_tot,Z_tot,R_tot,vol)
-     J_DU0 = VOL*DT +J_DU0
-     call integrate_volume(DG05,A_tot,Z_tot,R_tot,vol)
+     CALL integrate_spec(quad,DG04,vol,PH,NA,NZ,NR,xmax,xmin)
      J_DU0 = VOL*DT + J_DU0
-     call integrate_volume(DG06,A_tot,Z_tot,R_tot,vol)
+     CALL integrate_spec(quad,DG05,vol,PH,NA,NZ,NR,xmax,xmin)
      J_DU0 = VOL*DT + J_DU0
-
-
+     CALL integrate_spec(quad,DG06,vol,PH,NA,NZ,NR,xmax,xmin)
+     J_DU0 = VOL*DT + J_DU0
+  
      
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
      if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_DU0

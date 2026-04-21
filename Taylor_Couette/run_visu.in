@@ -31,7 +31,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = 'cond_init/init_25.h5'
+init_file = 'weird_opti/cond_init/init_25.h5'
 /
 
 

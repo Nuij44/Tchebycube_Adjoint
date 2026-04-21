@@ -74,11 +74,6 @@ def update_vector_rotation(x,mu,d,innerprod, **kwargs):
     x=np.asarray(x)
     d=np.asarray(d)
     dn=d/sqrt(innerprod(d,d))*sqrt(E0)
-
-    if isinstance(mu, np.ndarray):
-        mu = mu.flat[0]
-    mu = float(mu)
-
     Xnew=x*cos(mu)+dn*sin(mu) # Rotation method Douglas 98
     return Xnew
 ##################################################################

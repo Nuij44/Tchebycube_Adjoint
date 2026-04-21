@@ -182,7 +182,7 @@ program tcheby_1d
 
   eta = r_min/r_max
 
-  OMEGA_I = 1._DP
+  OMEGA_I = (r_min)**(-1.5_DP)
   OMEGA_O = (r_max)**(-1.5_DP)
   
   prm_A = (1._DP/(1._DP - eta**2)) * (OMEGA_o - OMEGA_i*eta**2)

@@ -247,7 +247,7 @@ program tcheby_1d
   DG04 = UA*UA*R
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
-
+  J_U = 0._DP
   CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
   CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
   J_U = integ + J_U
@@ -376,13 +376,20 @@ program tcheby_1d
   DG05 = UZ*UZ*R
   DG06 = UR*UR*R
 
+!  CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+!  CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+!  CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     
+!  J_U = DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)) 
+  
+  
   CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
   CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
   J_U = integ + J_U
   CALL integrate_spec(quad,DG06,integ,PH,NA,NZ,NR,xmax,xmin)
   J_U = integ + J_U
   
-  if (nrank==0) write(42,*)dt,J_U
+  if (nrank==0) write(42,*)dt,J_U*0.5_DP
   
   ! check divergence 
   call DIV( A, Z ,R, OPA, OPZ, OPR, UA, UZ, UR, DG09, dg01, dg02 , dg03 )
@@ -408,12 +415,12 @@ program tcheby_1d
      
      starttime = MPI_Wtime();
         
-!     CALL GRAD( A,Z,R, &
-!          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
+     CALL GRAD( A,Z,R, &
+          OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
      
-     SA = (2._DP*UA-0.5_DP*UAM1)/DT !- DG01 
-     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT !- DG02 
-     SR = (2._DP*UR-0.5_DP*URM1)/DT !- DG03
+     SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 
+     SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
+     SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03
      
      UAM1=UA
      UZM1=UZ
@@ -502,6 +509,7 @@ program tcheby_1d
      DG06 = UR*UR*R
 
 
+   
      CALL integrate_spec(quad,DG04,J_U,PH,NA,NZ,NR,xmax,xmin)
      CALL integrate_spec(quad,DG05,integ,PH,NA,NZ,NR,xmax,xmin)
      J_U = integ + J_U
@@ -510,7 +518,7 @@ program tcheby_1d
 
      
      call GetCFL(msh(1),msh(2),msh(3), UA, UZ, UR, dt, cfl)
-     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
+     if (rank==0) print'(i9,11(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U*0.5
 
      if (do_adj .AND. MOD(IT_TIME,2)==0) then
         if (memoire) then
@@ -524,7 +532,7 @@ program tcheby_1d
         end if
      end if
 
-     if (nrank==0) write(42,*)dt,J_U
+     if (nrank==0) write(42,*)dt,J_U*0.5_DP
 
 
      if (cfl .GT. 10.) then
@@ -647,9 +655,9 @@ program tcheby_1d
         CALL GRAD(A,Z,R, &
              OPA, OPZ, OPR, PRES, DG01,DG02, DG03)
         
-        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG01 - 2._DP*DG04
-        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 - 2._DP*DG05
-        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 - 2._DP*DG06
+        SA = (2._DP*UA-0.5_DP*UAM1)/DT - DG04 - DG01
+        SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG05 - DG02
+        SR = (2._DP*UR-0.5_DP*URM1)/DT - DG06 - DG03
 
         UAM1=UA
         UZM1=UZ
@@ -783,6 +791,8 @@ program tcheby_1d
 
   STOP
 
+
+  
   
 contains
 
