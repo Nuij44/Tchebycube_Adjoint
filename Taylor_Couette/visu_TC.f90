@@ -295,6 +295,8 @@ program tcheby_1d
   UZM1 = UZ
   URM1 = UR
 
+  CALL dealiazing(ua,uz,ur)
+  
   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,UA,UZ,UR,PRES,DG01,DG09)
   
   DG10 = UA + PRM_A*R + PRM_B/R
@@ -329,6 +331,12 @@ program tcheby_1d
      SZ = (2._DP*UZ-0.5_DP*UZM1)/DT - DG02 
      SR = (2._DP*UR-0.5_DP*URM1)/DT - DG03 
 
+     UAM1=UA
+     UZM1=UZ
+     URM1=UR
+
+     CALL dealiazing(ua,uz,ur)
+     
      DG10 = PRM_A*R + PRM_B/R  + UA
      
      CALL COMPUTE_NON_LINEAR_TERMS(&
@@ -360,10 +368,6 @@ program tcheby_1d
      NLAM1 = NLA
      NLZM1 = NLZ
      NLRM1 = NLR
-
-     UAM1=UA
-     UZM1=UZ
-     URM1=UR
 
      SIGMA = 1.5_DP/DT
 

@@ -54,11 +54,6 @@ def mean(list,r):
                    np.transpose(h5d['/u3'][:,:,:])
     h5d.close()
 
-    A = -1.0/3.0
-    B = 4.0/3.0
-        
-    ua = ua 
-    
     for i in range(1,np.size(list)):
         print("mean",i)
         h5d = h5.File(h5db+list[i], 'r')
@@ -95,8 +90,58 @@ def RMS(h5list,r):
         fr = fr + np.square(mean_r - np.transpose(h5d['/u3'][:,:,:]))
 
     return fa/np.size(list),fz/np.size(list),fr/np.size(list),mean_a,mean_z,mean_r
-    
 
+
+def RMS_V2(h5list,r):
+    h5d = h5.File(h5db+h5list[0], 'r')
+    ua,uz,ur =     np.transpose(h5d['/u1'][:,:,:]), \
+                   np.transpose(h5d['/u2'][:,:,:]), \
+                   np.transpose(h5d['/u3'][:,:,:])
+    h5d.close()
+
+
+    UA = ua#[ua for i in range(np.size(h5list))]
+    UZ = uz
+    UR = ur
+    
+    for i in range(1,np.size(h5list)):
+        print("mean",i)
+        h5d = h5.File(h5db+h5list[i], 'r')
+        UA = UA + np.transpose(h5d['/u1'][:,:,:])
+        UZ = UZ + np.transpose(h5d['/u2'][:,:,:])
+        UR = UR + np.transpose(h5d['/u3'][:,:,:])
+
+
+    mean_a = UA/np.size(h5list)
+    mean_z = UZ/np.size(h5list)
+    mean_r = UR/np.size(h5list)
+
+    FA = np.zeros_like(UA)
+    FZ = FA
+    FR = FA
+    
+    for i in range(np.size(h5list)):
+        print("load snap",i)
+        h5d = h5.File(h5db+h5list[i], 'r')
+        UA = np.transpose(h5d['/u1'][:,:,:])
+        UZ = np.transpose(h5d['/u2'][:,:,:])
+        UR = np.transpose(h5d['/u3'][:,:,:])
+
+        FA = FA + (UA - mean_a)**2
+        FZ = FZ + (UZ - mean_z)**2
+        FR = FR + (UR - mean_r)**2
+
+
+    fa = FA/np.size(h5list)
+    fz = FZ/np.size(h5list)
+    fr = FR/np.size(h5list)
+        
+    rms_a = ops.integrate(fa, axis=(0,1))
+    rms_z = ops.integrate(fz, axis=(0,1))
+    rms_r = ops.integrate(fr, axis=(0,1))
+
+    return rms_a,rms_z,rms_r,mean_a,mean_z,mean_r
+            
 # ---- Main ----
 
 if __name__ == "__main__":
@@ -131,15 +176,60 @@ if __name__ == "__main__":
         h5dlist.append(os.path.basename(files))
     h5dlist.sort()
 
+    '''
+    rms_a,rms_z,rms_r = ArtBilson(h5dlist[300:600],r)
+    A,Z,R = ops.nodes
+
+    with open("RMS_a.dat","w") as f:
+        for i in range(0,np.size(rms_a)):
+            print(R[i],rms_a[i])
+            f.write(f"{R[i]}    {rms_a[i]}\n")
+
+    with open("RMS_z.dat","w") as f:
+        for i in range(0,np.size(rms_z)):
+            print(R[i],rms_z[i])
+            f.write(f"{R[i]}    {rms_z[i]}\n")
+
+    with open("RMS_r.dat","w") as f:
+        for i in range(0,np.size(rms_r)):
+            print(R[i],rms_r[i])
+            f.write(f"{R[i]}    {rms_r[i]}\n")
+
+    exit()
+    '''    
     #Kinetic energy of the flow
-    write_nrj(h5db,h5dlist[400:600],r,ops)
-#    exit()
+    write_nrj(h5db,h5dlist,r,ops)
+    #    exit()
     #Compute RMS
     print("Taille list:",np.size(h5dlist))
+    #    print(h5dlist)
+    #    print(h5dlist[-2:np.size(h5dlist)])
+    rms_a,rms_z,rms_r,mean_a,mean_z,mean_r = RMS_V2(h5dlist[-30:np.size(h5dlist)],r)
+    A,Z,R = ops.nodes
 
-    
-    rms_a,rms_z,rms_r,mean_a,mean_z,mean_r = RMS(h5dlist[400:600],r)
+    with open("RMS_a.dat","w") as f:
+        for i in range(np.size(rms_a)):
+            print(R[i],rms_a[i])
+            f.write(f"{R[i]}    {rms_a[i]}\n")
 
+    with open("RMS_z.dat","w") as f:
+        for i in range(np.size(rms_z)):
+            print(R[i],rms_z[i])
+            f.write(f"{R[i]}    {rms_z[i]}\n")
+
+    with open("RMS_r.dat","w") as f:
+        for i in range(np.size(rms_r)):
+            print(R[i],rms_r[i])
+            f.write(f"{R[i]}    {rms_r[i]}\n")
+
+    pro_a = ops.integrate(mean_a, axis=(0,1))
+    with open("mean_a.dat","w") as f:
+        for i in range(np.size(pro_a)):
+            print(R[i],pro_a[i])
+            f.write(f"{R[i]}    {pro_a[i]}\n")
+
+            
+    exit()
 
         
     #integration sans jaccobienne car on intégre seulement dans theta et z

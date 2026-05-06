@@ -215,7 +215,7 @@ def prod_f90(x1,x2):
 
     command_base=" "+options.exe_dir+"/prod.x --input "+input_dir+" > prod_scal.txt"
 
-    command="mpirun -np "+str(nprocs)+command_base                                                                
+    command="srun -n "+str(nprocs)+command_base                                                                
     os.system(command)
 
     f = open("prod_scal/Prod.dat",'r')
@@ -341,8 +341,8 @@ if __name__ == '__main__':
 
     #Initialisation à partir d'un random
     
-    N = [65, 37, 49]
-    N= [49,37,65]
+    N = [129, 129, 65]
+    N= [65,129,129]
 
     init_ua = 2.*np.random.random(N)-np.ones(N)
     init_uz = 2.*np.random.random(N)-np.ones(N)
@@ -359,14 +359,14 @@ if __name__ == '__main__':
         #transposition des données pour avoir un ordre colonne major
         #data_read = [np.transpose(grad_u1, axes=(2,1,0)),np.transpose(grad_u2, axes=(2,1,0)),np.transpose(grad_u3, axes=(2,1,0))]
         
-    data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
+#    data_dns_start = [np.reshape(init_ua, (N[0],N[1],N[2])),np.reshape(init_uz, (N[0],N[1],N[2])),np.reshape(init_ur, (N[0],N[1],N[2]))]
 #    except: 
 #        print("The current directory is "+os.getcwd())
 #        print("%s is not inside this directory ?" % str_file) 
 #        sys.exit(1)
 
     
-#    data_dns_start=[init_ua, init_uz, init_ur]
+    data_dns_start=[init_ua, init_uz, init_ur]
     vector_begin=normalization(data_dns_start, options.E0, prod)
 
     print("x0 shape : ",np.shape(vector_begin))

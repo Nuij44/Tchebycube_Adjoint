@@ -117,7 +117,7 @@ if __name__ == "__main__":
     
     ops = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, 1.0],
-        xmax=[2*np.pi, np.pi, 2.0],
+        xmax=[2*np.pi, 2*np.pi, 2.0],
         n=np.shape(phi),
         bases=["fourier", "fourier","chebyshev"]
     )
@@ -134,11 +134,11 @@ if __name__ == "__main__":
     
     ope = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, 1.0],
-        xmax=[2*np.pi, np.pi, 2.0],
-        n=[128,65,128],
+        xmax=[2*np.pi, 2*np.pi, 2.0],
+        n=[257,197,97],
         bases=["fourier", "fourier","chebyshev"]
     )
-    i=8
+    i=40
     print(h5dlist[i])
     
     h5d = h5.File(h5db+h5dlist[i], 'r')

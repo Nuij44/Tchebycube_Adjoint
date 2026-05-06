@@ -1,5 +1,5 @@
 &parameters_cube
-na = 192 , 
+na = 128 , 
 nz = 64 ,
 nr = 64 ,
 r_min = 1.0,
@@ -31,7 +31,7 @@ resume = F,
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 100,
-init_file = 'weird_opti/cond_init/init_25.h5'
+init_file = '1Z_RE_10000/init_14.h5'
 /
 
 

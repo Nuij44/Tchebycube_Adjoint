@@ -47,7 +47,7 @@ program tcheby_1d
    
   ! attention au type à lire
   REAL(kind=8) :: a_min,a_max,z_min,z_max,r_min,r_max
-  integer :: na,nz,nr,nb_cpu_y,nb_cpu_z
+  integer :: na,nz,nr,nb_cpu_y,nb_cpu_z,nprocs
   namelist /parameters_cube/ na,nz,nr,z_min,z_max,r_min,r_max,nb_cpu_y,nb_cpu_z
   
   REAL(KIND=8) :: NU,prm_K,RE
@@ -90,7 +90,6 @@ program tcheby_1d
   CALL H5OPEN_F(IERR)
 
   call mpi_comm_rank(mpi_comm_world,rank,ierr)
-  
   call command_line_read_input_adj(input_file,output_dir,init_file,do_adj)
 
   if (rank==0) then
@@ -119,7 +118,7 @@ program tcheby_1d
   
   CALL MPI_BCAST( nb_cpu_y, 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
   CALL MPI_BCAST( nb_cpu_z, 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
-  
+
   
   CALL MPI_BCAST( RE, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
   
@@ -136,6 +135,7 @@ program tcheby_1d
   N = [NA,NZ,NR]  
   CPU_GRID = [NB_CPU_Y,NB_CPU_Z]
 
+ 
   ALPHA = 1._DP
   BETA = 5._DP
   

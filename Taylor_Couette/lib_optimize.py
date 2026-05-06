@@ -136,7 +136,7 @@ def optimize_rotation(fun, X0, jac, innerprod, direction, DnsAdj=True,**kwargs):
         Count_ls.append(count_ls)
         wp0=wp
         x=lib_linesearch.update_vector_rotation(x,mu,d,innerprod, **kwargs)
-        res0=sqrt(innerprod(wp,wp))
+        res0=sqrt(innerprod(w,w))
         res=sqrt(innerprod(wp,wp)/innerprod(w,w))
         residuLoop.append(res0)
         Residual.append(res)
