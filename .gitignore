@@ -8,6 +8,7 @@
 !Enstrophy_TC/
 !lin_TC/
 !cheby-tools/
+!turbulent_TC/
 
 #Whitelist des contenus
 !src/**
@@ -15,6 +16,14 @@
 !ThirdParty/**
 
 !h5conv_cyl.py
+
+!turbulent_TC/*.f90
+!turbulent_TC/*.slurm
+!turbulent_TC/*.in
+!turbulent_TC/*.txt
+!turbulent_TC/Q1_Lesur_Longaretti/*.in
+!turbulent_TC/Q1_Lesur_Longaretti/*.slurm
+!turbulent_TC/Q1_Lesur_Longaretti/*.dat
 
 !Taylor_Couette/*.f90
 !Taylor_Couette/*.slurm
@@ -38,4 +47,6 @@
 !cheby-tools/spec_forge/*.py
 
 #Whitelist du .gitignore
-!.gitignore
+!.gitignoreoutdir/
+#Blacklist des outdir
+**/outdir/
