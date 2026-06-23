@@ -72,10 +72,6 @@ def write_init_h5(U,V,W,output_name):
 
     dump = outfile['/dump']
 
-#    dump_u = dump.create_dataset(name='u1', data=np.transpose(U), dtype=np.float64)
-#    dump_v = dump.create_dataset(name='u2', data=np.transpose(V), dtype=np.float64)
-#    dump_w = dump.create_dataset(name='u3', data=np.transpose(W), dtype=np.float64)
-    
     dump_u = dump.create_dataset(name='u1', data=U, dtype=np.float64)
     dump_v = dump.create_dataset(name='u2', data=V, dtype=np.float64)
     dump_w = dump.create_dataset(name='u3', data=W, dtype=np.float64)
@@ -215,7 +211,7 @@ def prod_f90(x1,x2):
 
     command_base=" "+options.exe_dir+"/prod.x --input "+input_dir+" > prod_scal.txt"
 
-    command="mpirun -np "+str(nprocs)+command_base                                                                
+    command="srun -n "+str(nprocs)+command_base                                                                
     os.system(command)
 
     f = open("prod_scal/Prod.dat",'r')
@@ -341,8 +337,8 @@ if __name__ == '__main__':
 
     #Initialisation à partir d'un random
     
-    N = [65, 37, 49]
-    N= [49,37,65]
+    N = [97, 129, 49]
+    N= [49,129,97]
 
     init_ua = 2.*np.random.random(N)-np.ones(N)
     init_uz = 2.*np.random.random(N)-np.ones(N)

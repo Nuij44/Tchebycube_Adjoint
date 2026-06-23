@@ -44,6 +44,7 @@ set(EXECUTABLES
   test_grad.x:test_grad.f90
   test_op.x:test_op.f90
   prod.x:prod.f90
+  couette_cart.x:couette_cart.f90
 )
 
 # Add source file paths
