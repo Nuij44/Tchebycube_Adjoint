@@ -6,11 +6,9 @@ enable_language(Fortran)
 
 set(case_name "optimisation")
 set(DepDir $ENV{DepDir})
-
 set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -traceback -r8 -check bounds -debug extended")
 set(CMAKE_Fortran_FLAGS_RELEASE "-O2 -r8")
-set(CMAKE_BUILD_TYPE DEBUG)  # Spécifier le type de build
-
+set(CMAKE_BUILD_TYPE DEBUG)
 
 # Add m_fourier_tools.f90 as a source file for the executable
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -34,18 +32,18 @@ include_directories(${HDF5_INCLUDE_DIRS})
 # Add subdirectory for Tcheb3 library if applicable
 add_subdirectory(${SRC_DIR} ${BIN_DIR})
 
-#set(COMMON_SOURCE_FILES m_udf_mms.f90)
+set(COMMON_SOURCE_FILES
+#	m_udf_mms_adj.f90
+#	m_udf_mms.f90
+	)	
 
 set(EXECUTABLES
-  DAL_TC.x:DAL_TC.f90
-  DAL_lin.x:DAL_lin.f90	
-  visu_TC.x:visu_TC.f90
-#  lin_visu_TC.x:lin_visu_TC.f90	
+#	 MMS_diag.x:MMS_diag.f90
+	 kerswell.x:kerswell.f90
 )
 
 # Add source file paths
 #set(COMMON_SOURCE_FILES m_udf_mms.f90)
-
 
 # Boucle pour créer les exécutables
 foreach(EXEC ${EXECUTABLES})
@@ -59,15 +57,14 @@ foreach(EXEC ${EXECUTABLES})
     # Ajout du répertoire contenant les .mod de 2decomp
     target_include_directories(${EXEC_NAME}
       PRIVATE
-      ${DepDir}/2decomp-fft-2.0.4-icc20-mpi/include
-      ${DepDir}/fftw-3.3.10-icc20-mpi/include
+      ${DepDir}/lib/cray/decomp2d/include
+      ${DepDir}/lib/cray/fftw3/include
       ${HDF5_INCLUDE_DIRS}
     )
     
     # Lier les bibliothèques nécessaires
-    target_link_libraries(${EXEC_NAME} PRIVATE Tcheb3 BLAS::BLAS HDF5::HDF5 ${DepDir}/2decomp-fft-2.0.4-icc20-mpi/lib64/libdecomp2d.a ${DepDir}/fftw-3.3.10-icc20-mpi/lib64/libfftw3.so)
+    target_link_libraries(${EXEC_NAME} PRIVATE Tcheb3 BLAS::BLAS HDF5::HDF5 ${DepDir}/lib/cray/decomp2d/lib64/libdecomp2d.a ${DepDir}/lib/cray/fftw3/lib64/libfftw3.so)
 
     # Définir le répertoire de sortie
     set_target_properties(${EXEC_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endforeach()
-

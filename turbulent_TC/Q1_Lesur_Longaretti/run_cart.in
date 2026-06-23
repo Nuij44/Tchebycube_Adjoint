@@ -1,0 +1,35 @@
+&parameters_cube
+nx = 256 ,
+ny = 128 ,
+nz = 516 ,
+x_max = 1.75, !* pi
+y_max = 1.2 ,!* pi
+z_max = 1. ,  
+nb_cpu_y = 8 ,
+nb_cpu_z = 12
+/
+
+
+&parameters_physical
+Re = 50000. ,
+q = 1.,
+/
+
+
+&parameters_timescheme
+tmax = 1000 ,
+dt = 1E-4 ,
+cfl = 0.5 ,
+root_dir = 'outdir/'
+dn_dump = 1000,
+resume = F,
+explicit = F,
+io_nrj = 'ex.dat'
+/
+
+&parameters_diagnostics
+snap_dir = 'snapshots/'
+dn_snap = 500,
+data_start = 'init.h5'
+/
+

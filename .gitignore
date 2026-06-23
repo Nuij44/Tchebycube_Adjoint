@@ -3,7 +3,7 @@
 
 #Whitelist des répertoire
 !src/
-!ThirdParty/
+#!ThirdParty/
 !Taylor_Couette/
 !Enstrophy_TC/
 !lin_TC/
@@ -13,17 +13,16 @@
 #Whitelist des contenus
 !src/**
 
-!ThirdParty/**
-
 !h5conv_cyl.py
 
 !turbulent_TC/*.f90
 !turbulent_TC/*.slurm
 !turbulent_TC/*.in
 !turbulent_TC/*.txt
+!turbulent_TC/*.tar
+!turbulent_TC/Q1_Lesur_Longaretti/
 !turbulent_TC/Q1_Lesur_Longaretti/*.in
 !turbulent_TC/Q1_Lesur_Longaretti/*.slurm
-!turbulent_TC/Q1_Lesur_Longaretti/*.dat
 
 !Taylor_Couette/*.f90
 !Taylor_Couette/*.slurm
