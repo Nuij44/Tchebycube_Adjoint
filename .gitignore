@@ -9,6 +9,7 @@
 !lin_TC/
 !cheby-tools/
 !turbulent_TC/
+!*.md
 
 #Whitelist des contenus
 !src/**
