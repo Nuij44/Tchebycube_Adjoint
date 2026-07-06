@@ -1,6 +1,6 @@
 module m_solver_diag_cart_fft_cplx
   use decomp_2d
-  use m_operator_tcheby
+  use m_operator_tcheby, only: t_operator_tcheby
   use m_solver_diag_base
   use m_lap1d_tcheby
   use m_lap1d_fourier

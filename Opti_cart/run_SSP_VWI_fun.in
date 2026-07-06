@@ -1,26 +1,27 @@
 &parameters_cube
-nx = 256 ,
-ny = 128 ,
-nz = 128 ,
-x_max = 1.75, !* pi
-y_max = 1.2 ,!* pi
+nx = 128 ,
+ny = 32 ,
+nz = 64 ,
+x_max = 4.35, !* pi
+y_max = 1.05 ,!* pi
 z_max = 1. ,  
-nb_cpu_y = 8 ,
+nb_cpu_y = 16 ,
 nb_cpu_z = 16
 /
 
 
 &parameters_physical
-Re = 50000. ,
-q = 1.,
+Re = 1000. ,
+Pr = 1. ,
+Ri = 1e-4 ,
 /
 
 
 &parameters_timescheme
-tmax = 1000 ,
-dt = 2.5E-5 ,
+tmax = 20 ,
+dt = 1E-2 ,
 cfl = 0.5 ,
-root_dir = 'outdir/'
+root_dir = 'data_fun/'
 dn_dump = 1000,
 resume = F,
 explicit = F,
@@ -30,6 +31,6 @@ io_nrj = 'ex.dat'
 &parameters_diagnostics
 snap_dir = 'snapshots/'
 dn_snap = 500,
-data_start = 'init.h5'
 /
+
 

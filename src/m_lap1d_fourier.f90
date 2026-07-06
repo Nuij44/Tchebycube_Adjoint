@@ -14,7 +14,7 @@ module m_lap1d_fourier
 contains
   
   subroutine init_lap1d_fourier(this,op,nu,n)
-    use m_operator_fourier
+    use m_operator_fourier, only: t_operator_fourier
     implicit none
     !.. Args
     class(t_lap1d_fourier ),target,intent(out)   ::  this

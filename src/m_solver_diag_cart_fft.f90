@@ -5,8 +5,8 @@ module m_solver_diag_cart_fft
   use m_lap1d_tcheby
   use m_lap1d_fourier
   use m_boundary_conditions
-  use m_operator_fourier
-  use m_operator_tcheby
+  use m_operator_fourier, only: t_operator_fourier
+  use m_operator_tcheby, only: t_operator_tcheby
   use decomp_2d
   use decomp_2d_fft
   use decomp_2d_mpi

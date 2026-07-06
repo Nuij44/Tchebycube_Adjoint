@@ -10,6 +10,7 @@
 !cheby-tools/
 !turbulent_TC/
 !*.md
+!Opti_cart/
 
 #Whitelist des contenus
 !src/**
@@ -42,6 +43,11 @@
 !lin_TC/*.py
 !lin_TC/*.in
 !lin_TC/CMakeLists.txt
+
+!Opti_cart/*.f90
+!Opti_cart/*.in
+!Opti_cart/*.py
+!Opti_cart/*.slurm
 
 !cheby-tools/spec_forge/
 !cheby-tools/spec_forge/*.py

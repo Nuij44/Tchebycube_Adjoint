@@ -13,13 +13,13 @@ program tcheby_1d
    use decomp_2d
    !>
    use m_solver_diag_cart_hhi
-   use m_solver_diag_cart_hhi_cplx
+!   use m_solver_diag_cart_hhi_cplx
    
    !>
    use m_navier_stokes_cart
    use m_snapshots
    use m_quadrature
-   use ifport
+!   use ifport
    implicit none
    
    type(t_mesh_base)       ::  msh(3)
@@ -124,17 +124,20 @@ program tcheby_1d
       read(24, nml=parameters_timescheme, IOSTAT=iostat)
       read(24, nml=parameters_diagnostics, IOSTAT=iostat)
       close(24)
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/dump' )
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/save' )
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//trim(snap_dir) )
-      ierr = SYSTEM('mkdir -p output_couette')
-      write(*,parameters_cube)
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/dump' )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/save' )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//trim(snap_dir) )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p output_couette')
+      write(6,parameters_cube)
+      flush(6)
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
       OPEN(UNIT=50, FILE='output_couette/Pushover.dat')
       OPEN(UNIT=60, FILE='output_couette/Liftup.dat')
       OPEN(UNIT=110, FILE='output_couette/Orr_reste.dat')
       OPEN(UNIT=70, FILE='output_couette/Orr_span.dat')
       OPEN(UNIT=80, FILE='output_couette/L2_nrj.dat')
+      OPEN(UNIT=99, FILE='output_couette/x_specter.dat')
+      OPEN(UNIT=90, FILE='output_couette/y_specter.dat')
    end if
    
    
@@ -184,10 +187,10 @@ program tcheby_1d
 
 !   data_start = 'init.h5'
    
-   if (rank ==0)print*,trim(data_start)
+   if (rank ==0)write(6,*)trim(data_start);flush(6)
    
-   if (rank ==0)print*,xmin,xmax
-   if (rank ==0)print*,"q : ",q
+   if (rank ==0)write(6,*)xmin,xmax;flush(6)
+   if (rank ==0)write(6,*)"q : ",q;flush(6)
    nb_iter = floor(tmax/dt)
 
    file_dump = trim(root_dir)//'dump/dump.h5'
@@ -388,7 +391,7 @@ program tcheby_1d
       CALL integrate_spec(quad,DG06,integ,PH,N(1),N(2),N(3),xmax,xmin)
       J_U = integ + J_U
 
-      if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
+      if (rank==0) write(6,'(i9,10(1x,e15.8))')it_time,tc,dt,cfl,DIV_MAX,endtime,J_U;flush(6)
 
 !      div_max = maxval((U_tot))
 !      CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
@@ -398,7 +401,7 @@ program tcheby_1d
 
 !      if (nrank==0) print*,'min U_tot:',div_max
       
-      if (rank==0) write(80,*)TC,J_U*0.5_DP
+      if (rank==0) write(80,*)TC,J_U*0.5_DP;flush(80)
 
 
       if (mod(it_time,100)==0) then
@@ -432,12 +435,12 @@ program tcheby_1d
          CALL integrate_spec(quad,DG05,push,PH,N(1),N(2),N(3),xmax,xmin)
          err = MAXVAL(DG04)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
-         if (rank==0) write(60,*)TC,lift,err
+         if (rank==0) write(60,*)TC,lift,err;flush(60)
 
          err = MAXVAL(DG05)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
 
-         if (rank==0) write(50,*)TC,push,err
+         if (rank==0) write(50,*)TC,push,err;flush(50)
 
          
          !Calcul de Orr spanwise + reste Orr
@@ -484,10 +487,10 @@ program tcheby_1d
          err_reste = MAX(err_reste,MAXVAL(DG06))
          
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
-         if (rank==0) write(70,*)TC,orr_span,err_span
+         if (rank==0) write(70,*)TC,orr_span,err_span;flush(70)
 
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(110,*)TC,orr_reste,err_reste
+         if (rank==0) write(110,*)TC,orr_reste,err_reste;flush(110)
          
       end if
       
@@ -502,10 +505,10 @@ program tcheby_1d
          CALL zwise_MOD(U,V,W,SP_Z,N(2)/2)
 
          write(form,'(i3)')n(1)/2
-         write(90,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_x
+         write(90,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_x;flush(90)
          
          write(form,'(i3)')n(2)/2
-         write(100,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z
+         write(99,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z;flush(100)
 
       end if
       
@@ -768,7 +771,7 @@ program tcheby_1d
       V = (2._dp*NOISE_V - 1._dp)*NOISE
       W = (2._dp*NOISE_W - 1._dp)*NOISE
 
-!      U = SIN(pi*Y)*SIN(pi*Z)*SIN(pi*X)*NOISE
+      U = SIN(pi*Y)*SIN(pi*Z)*SIN(pi*X)*NOISE
       
 !      CALL normalize(quad,U_0,U,PH,N)
 !      CALL normalize(quad,V_0,V,PH,N)

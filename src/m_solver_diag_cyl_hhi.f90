@@ -64,8 +64,9 @@ contains
 
   subroutine ifce_initialise(this,grid,opx,opy,opz,ph)
     use m_mesh_base
-    use m_operator_tcheby
-    use m_operator_fourier_dft
+    use m_operator_tcheby, only: t_operator_tcheby
+    use m_operator_fourier_dft, only: t_operator_fourier_dft
+    use m_operator_fourier,     only: t_operator_fourier
     use decomp_2d
     implicit none
     class(t_solver_diag_cyl_hhi):: this
@@ -96,8 +97,9 @@ contains
 
   subroutine ifce_initialise_svv(this,grid,opx,opy,opz,alpha,beta,ph)
     use m_mesh_base
-    use m_operator_tcheby
-    use m_operator_fourier_dft
+    use m_operator_tcheby, only: t_operator_tcheby
+    use m_operator_fourier_dft, only: t_operator_fourier_dft
+    use m_operator_fourier,     only: t_operator_fourier
     use decomp_2d
     implicit none
     class(t_solver_diag_cyl_hhi):: this
@@ -129,8 +131,8 @@ contains
   
   subroutine build(this,grid,opx,opy,opz,sigma,nu,bcl,bcr,ph,n)
     use m_mesh_base
-    use m_operator_tcheby
-    use m_operator_fourier
+    use m_operator_tcheby, only: t_operator_tcheby
+    use m_operator_fourier, only: t_operator_fourier
     use decomp_2d
     implicit none
     class(t_solver_diag_cyl_hhi) :: this

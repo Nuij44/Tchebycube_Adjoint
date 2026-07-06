@@ -13,13 +13,13 @@ program tcheby_1d
    use decomp_2d
    !>
    use m_solver_diag_cart_hhi
-   use m_solver_diag_cart_hhi_cplx
+!   use m_solver_diag_cart_hhi_cplx
    
    !>
    use m_navier_stokes_cart
    use m_snapshots
    use m_quadrature
-   use ifport
+!   use ifport
    implicit none
    
    type(t_mesh_base)       ::  msh(3)
@@ -124,10 +124,10 @@ program tcheby_1d
       read(24, nml=parameters_timescheme, IOSTAT=iostat)
       read(24, nml=parameters_diagnostics, IOSTAT=iostat)
       close(24)
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/dump' )
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//'/save' )
-      ierr = SYSTEM('mkdir -p '//trim(root_dir)//trim(snap_dir) )
-      ierr = SYSTEM('mkdir -p output_couette')
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/dump' )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/save' )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//trim(snap_dir) )
+      CALL EXECUTE_COMMAND_LINE('mkdir -p output_couette')
       write(*,parameters_cube)
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
       OPEN(UNIT=50, FILE='output_couette/Pushover.dat')

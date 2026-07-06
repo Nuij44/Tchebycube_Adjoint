@@ -1,10 +1,12 @@
 #!/bin/bash
-#SBATCH --account=c2017511
-#SBATCH --constraint=GENOA
+#SBATCH --account=project_465002977
+#SBATCH --partition=small
 #SBATCH --job-name=Q1_Lesur
 #SBATCH --nodes=1
-#SBATCH --ntasks=96
+#SBATCH --ntasks=128
 #SBATCH --time=1-00:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=256G
 #SBATCH --output=Q1_Lesur%j.out
 #SBATCH --error=error_Q1_Lesur%j.out
 #SBATCH --exclusive
@@ -15,4 +17,4 @@ source ~/./start.sh
 
 set -x
  
-srun -n 96 ../build/Q1_kerswell.x --input run_cart.in
+srun -n 128 ../build/Q1_kerswell.x --input run_cart.in

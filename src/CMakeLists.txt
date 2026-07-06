@@ -41,8 +41,8 @@ find_package(MPI REQUIRED)
 
 target_include_directories(Tcheb3
   PUBLIC
-  ${DepDir}/2decomp-fft-2.0.4-icc20-mpi/include
-  ${DepDir}/fftw-3.3.10-icc20-mpi/include
+  ${DepDir}/lib/intel/decomp2d/include
+  ${DepDir}/lib/intel/fftw3/include
   ${HDF5_INCLUDE_DIRS}
   ${MPI_Fortran_INCLUDE_PATH}
 )

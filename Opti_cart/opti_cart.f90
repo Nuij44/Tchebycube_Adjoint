@@ -19,7 +19,7 @@ program tcheby_1d
    use m_navier_stokes_cart
    use m_snapshots
    use m_quadrature
-!   use ifport
+
    implicit none
    
    type(t_mesh_base)       ::  msh(3)
@@ -43,23 +43,23 @@ program tcheby_1d
    
    real(kind=8) :: dirichl(2),neumann(2)  
    integer :: n(3),cpu_grid(2),ierr
-   REAL(kind=8) ::  xmin(3), xmax(3),err,err_span,err_reste
+   REAL(kind=8) ::  xmin(3), xmax(3),err
    REAL(kind=8) ::  tc
    
    TYPE(DECOMP_INFO) :: ph
    
-   real(kind=8),allocatable ,dimension(:,:,:) ::  U_Tot
+   real(kind=8),allocatable ,dimension(:,:,:) ::  U_Tot,T_tot
    real(kind=8),allocatable ,dimension(:,:,:) ::  U_T,V_T,W_T
-   real(kind=8),allocatable ,dimension(:,:,:) ::  U_0,V_0,W_0
-   real(kind=8),allocatable ,dimension(:,:,:) ::  UM1,VM1,WM1
-   real(kind=8),allocatable ,dimension(:,:,:) ::  NLUM1,NLVM1,NLWM1
+   real(kind=8),allocatable ,dimension(:,:,:) ::  U_0,V_0,W_0,T_0
+   real(kind=8),allocatable ,dimension(:,:,:) ::  UM1,VM1,WM1,TM1
+   real(kind=8),allocatable ,dimension(:,:,:) ::  NLUM1,NLVM1,NLWM1,NLTM1
    real(kind=8),allocatable ,dimension(:,:,:) ::  DU_0,DV_0,DW_0
    real(kind=8),allocatable ,dimension(:,:,:) ::  DJ_U_ADJ,DJ_V_ADJ,DJ_W_ADJ
-   real(kind=8),allocatable ,dimension(:,:,:) ::  U,V,W,PRES,FI
-   real(kind=8),allocatable ,dimension(:,:,:) ::  SU,SV,SW,SFI
-   real(kind=8),allocatable ,dimension(:,:,:) ::  NLU,NLV,NLW
-   real(kind=8),allocatable ,dimension(:,:,:) ::  LU,LV,LW,X,Y,Z
-   real(dp),allocatable     ::  NOISE_U(:,:,:),NOISE_V(:,:,:),NOISE_W(:,:,:)
+   real(kind=8),allocatable ,dimension(:,:,:) ::  U,V,W,PRES,T,FI
+   real(kind=8),allocatable ,dimension(:,:,:) ::  SU,SV,SW,SFI,ST
+   real(kind=8),allocatable ,dimension(:,:,:) ::  NLU,NLV,NLW,NLT
+   real(kind=8),allocatable ,dimension(:,:,:) ::  LU,LV,LW,LT,X,Y,Z
+   real(dp),allocatable     ::  NOISE_U(:,:,:),NOISE_V(:,:,:),NOISE_W(:,:,:),NOISE_T(:,:,:)
    real(kind=8) :: w2,t1,h
    integer :: it_time,is(3),ie(3)
    integer , parameter :: OX=1,OY=2,OZ=3
@@ -70,9 +70,9 @@ program tcheby_1d
    integer :: nx,ny,nz,nb_cpu_y,nb_cpu_z
    namelist /parameters_cube/ nx,ny,nz,x_max,y_max,z_max,nb_cpu_y,nb_cpu_z
    
-   REAL(KIND=8) :: Re,q
+   REAL(KIND=8) :: Re,Pr,Ri
    INTEGER :: nb_iter
-   namelist /parameters_physical/ Re,q
+   namelist /parameters_physical/ Re,Pr,Ri
    
    character(len=1024) ::  root_dir,io_nrj
    REAL(kind=8) ::  dt,cfl,tmax
@@ -85,28 +85,23 @@ program tcheby_1d
    character(len=1024) ::  snap_dir
    real(kind=8) :: snap_dt,starttime,endtime
    integer :: snap_id
-   namelist /parameters_diagnostics/ dn_snap,snap_dir,resume_snap,data_start
+   namelist /parameters_diagnostics/ dn_snap,snap_dir,resume_snap
    
    character(len=1024) ::  input_file,output_dir,init_file
    integer :: rank,iostat,seed_size
    integer, allocatable :: myseed(:)
-   character(len=1024) ::  file_dump, base_snap, filename, base_save,data_start
-   character(len=6) :: num,form
-   REAL(kind=8) ::  DIV_MAX,tmp,DJ_ADJ,J_DU0,J_U,push,orr,lift,orr_span,orr_reste
+   character(len=1024) ::  file_dump, base_snap, filename, base_save
+   character(len=6) :: num
+   REAL(kind=8) ::  DIV_MAX,tmp,DJ_ADJ,J_DU0,J_U
    
    REAL(KIND=8),DIMENSION(3) :: NU_MOMENTUM
    REAL(KIND=8),DIMENSION(3) :: NU_ENERGY
    REAL(KIND=8),DIMENSION(3) :: NU_POISSON
-   REAL(kind=8) :: sigma,alpha_buoy,noise,res,nl_cfl,integ
+   REAL(kind=8) :: sigma,alpha_buoy,noise,res,nl_cfl
    
    LOGICAL :: do_adj = .FALSE.
    
    REAL(DP),DIMENSION(:,:,:,:),ALLOCATABLE :: SAVE_U,SAVE_V,SAVE_W,SAVE_T
-
-   COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGU,DGV,DGW
-   COMPLEX(DP),ALLOCATABLE,DIMENSION(:,:,:) :: DGU_Y,DGV_Y,DGW_Y
-
-   REAL(DP),ALLOCATABLE,DIMENSION(:) :: E_azi, E_ver, sp_x, sp_z,VOL_R
    
    LOGICAL :: memoire = .TRUE.
 
@@ -127,18 +122,11 @@ program tcheby_1d
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/dump' )
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/save' )
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//trim(snap_dir) )
-      CALL EXECUTE_COMMAND_LINE('mkdir -p Post')
+      CALL EXECUTE_COMMAND_LINE('mkdir -p output_dns')
       write(*,parameters_cube)
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
-      OPEN(UNIT=50, FILE='Post/Pushover.dat')
-      OPEN(UNIT=60, FILE='Post/Liftup.dat')
-      OPEN(UNIT=110, FILE='Post/Orr_reste.dat')
-      OPEN(UNIT=70, FILE='Post/Orr_span.dat')
-      OPEN(UNIT=80, FILE='Post/L2_nrj.dat')
    end if
-   
-   
-   
+
    x_min = 0._DP
    y_min = 0._DP
    z_min = -1._DP
@@ -160,12 +148,12 @@ program tcheby_1d
    CALL MPI_BCAST( nb_cpu_y, 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
    CALL MPI_BCAST( nb_cpu_z, 1,MPI_INTEGER         ,0,MPI_COMM_WORLD,IERR)
    
-   CALL MPI_BCAST( Re, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR )
-   CALL MPI_BCAST( q, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
+   CALL MPI_BCAST( Re, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
+   CALL MPI_BCAST( Pr, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
+   CALL MPI_BCAST( Ri, 1, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
    
    CALL MPI_BCAST( resume  , 1   , MPI_LOGICAL         , 0, MPI_COMM_WORLD, IERR ) 
    CALL MPI_BCAST( root_dir, 1024, MPI_character       , 0, MPI_COMM_WORLD, IERR )
-   CALL MPI_BCAST( data_start, 1024, MPI_character       , 0, MPI_COMM_WORLD, IERR )
    CALL MPI_BCAST( dn_dump , 1   , MPI_INTEGER         , 0, MPI_COMM_WORLD, IERR )
    CALL MPI_BCAST( dt      , 1   , MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR ) 
    CALL MPI_BCAST( cfl     , 1   , MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, IERR )
@@ -181,19 +169,15 @@ program tcheby_1d
    
    xmin(1:3) = [x_min,y_min,z_min]
    xmax(1:3) = [x_max*pi,y_max*pi,z_max]
-
-!   data_start = 'init.h5'
    
-   if (rank ==0)print*,trim(data_start)
-   
-   if (rank ==0)print*,xmin,xmax
-   if (rank ==0)print*,"q : ",q
    nb_iter = floor(tmax/dt)
 
    file_dump = trim(root_dir)//'dump/dump.h5'
    base_snap = trim(root_dir)//trim(snap_dir)//'snap_'
    base_save = trim(root_dir)//'save/save_'
    
+   write(*,*) rank,cpu_grid
+
    ! GRILLE 2D
    CALL DECOMP_2D_INIT( &
    NX = N(1)+1, NY = N(2)+1, NZ = N(3)+1 , P_ROW= CPU_GRID(1) , P_COL= CPU_GRID(2) )
@@ -231,6 +215,8 @@ program tcheby_1d
    
    NU_MOMENTUM = -  1._DP/Re
    NU_POISSON  =  1.
+   NU_ENERGY = - 1._DP/(Re*Pr)
+   ALPHA_BUOY = Ri
    
    CALL EQN_U%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
    CALL EQN_U%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
@@ -247,6 +233,11 @@ program tcheby_1d
    CALL EQN_W%INITIALISE(MSH,OPX,OPY,OPZ,PH)
    CALL EQN_W%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
    
+   CALL EQN_T%SET_PARAMS( NU=NU_ENERGY , SIGMA=0D0 )
+   CALL EQN_T%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
+   CALL EQN_T%INITIALISE( MSH , OPX , OPY , OPZ , PH )
+   CALL EQN_T%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+   
    CALL EQN_P%SET_PARAMS( NU=NU_POISSON , SIGMA=0D0 )
    CALL EQN_P%SET_BCS( AXIS=3 , BCS_MINUS=NEUMANN , BCS_PLUS=NEUMANN )
    CALL EQN_P%INITIALISE(MSH,OPX,OPY,OPZ,PH)
@@ -255,30 +246,141 @@ program tcheby_1d
    
    call preproc()
 
+   !Allocattion des tableaux pour sauver les iterations   
+   if (do_adj) then
+      if (memoire) then
+         ALLOCATE(SAVE_U(0:nb_iter,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_U = 0._DP
+         ALLOCATE(SAVE_V(0:nb_iter,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_V = 0._DP
+         ALLOCATE(SAVE_W(0:nb_iter,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_W = 0._DP
+         ALLOCATE(SAVE_T(0:nb_iter,PH%XST(1):PH%XEN(1),PH%XST(2):PH%XEN(2),PH%XST(3):PH%XEN(3))); SAVE_T = 0._DP
+      end if
+   end if
 
+   ! Lecture de la condition initiale
+   CALL IMPORT_HDF5_INIT(TRIM(init_file),U,V,W,T)
+
+
+   if (do_adj) then
+      if (memoire) then
+         SAVE_U(0,:,:,:) = U(:,:,:)
+         SAVE_V(0,:,:,:) = V(:,:,:)
+         SAVE_W(0,:,:,:) = W(:,:,:)
+         SAVE_T(0,:,:,:) = T(:,:,:)
+      else
+         write(num,'(I6.6)')0
+         filename = trim(base_save)//num//'.h5'
+         call save_hdf5(trim(FILENAME),MSH,U,V,W,T)
+      end if
+   end if
+
+
+   CALL DUMP_HDF5_BASIC(FILE_DUMP,'NEW',TC,DT,MSH,U,V,W,PRES,T,DG09)
+
+   T = 0._DP
+   
+   
+   UM1 = U
+   VM1 = V
+   WM1 = W
+   TM1 = T
+   
+   tc = 0
+   snap_dt = 0
+   J_U = 0._DP
+   J_DU0 = 0._DP
+
+   FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+      U_tot(I,J,K) = U(I,J,K) + Z(I,J,K)
+   END FORALL
+   
+   CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+   
+   NLUM1=NLU
+   NLVM1=NLV
+   NLWM1=NLW
+   NLTM1=NLT
  
-   DO IT_time=1,10
-
-      TC = it_time*100
+   DO IT_time=1,nb_iter
       
-      write(num,'(I6.6)')it_time
-      if (nrank==0) print*,TRIM("outdir/snapshots/snap_"//TRIM(num)//".h5")
-      CALL IMPORT_HDF5_INIT_SNAP(TRIM("outdir/snapshots/snap_"//TRIM(num)//".h5"),U,V,W)
+      tc = tc + dt
+      snap_dt = snap_dt + dt
       
-      U = U + Z
+      starttime = MPI_Wtime();
       
-      DG04 = U*U
-      DG05 = V*V
-      DG06 = W*W
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         U_tot(I,J,K) = U(I,J,K) + Z(I,J,K)
+         T_tot(I,J,K) = T(I,J,K) - Z(I,J,K)
+      END FORALL
 
-      CALL integrate_spec(quad,DG04,J_U,PH,N(1),N(2),N(3),xmax,xmin)
-      CALL integrate_spec(quad,DG05,integ,PH,N(1),N(2),N(3),xmax,xmin)
-      J_U = integ + J_U
-      CALL integrate_spec(quad,DG06,integ,PH,N(1),N(2),N(3),xmax,xmin)
-      J_U = integ + J_U
-
-      if (nrank == 0) print*,it_time,"E0 : ",J_U
-
+      CALL COMPUTE_NON_LINEAR_TERMS(&
+      OPX, OPY, OPZ, U_tot, V, W, T_tot, NLT, &
+      DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)     
+      
+      ST = (2._DP*T-0.5_DP*TM1)/DT - 2._DP*NLT + NLTM1
+      
+      TM1 = T
+      NLTM1 = NLT
+      
+      SIGMA = 1.5_DP/DT
+      CALL EQN_T%SOLVE(T, ST, SIGMA ,PH)
+      
+      
+      CALL GRAD(&
+      OPX, OPY, OPZ, PRES, DG01,DG02, DG03)
+      
+      SU = (2._DP*U-0.5_DP*UM1)/DT - DG01
+      SV = (2._DP*V-0.5_DP*VM1)/DT - DG02
+      SW = (2._DP*W-0.5_DP*WM1)/DT - DG03
+      
+      
+      CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+      
+      NLW = NLW + alpha_buoy*T
+      
+      SU = SU - 2._DP*NLU + NLUM1
+      SV = SV - 2._DP*NLV + NLVM1
+      SW = SW - 2._DP*NLW + NLWM1
+      
+      UM1=U
+      VM1=V
+      WM1=W
+      
+      NLUM1 = NLU
+      NLVM1 = NLV
+      NLWM1 = NLW
+      
+      SIGMA = 1.5_DP/DT
+      
+      CALL EQN_U%SOLVE(U, SU, SIGMA ,PH)
+      CALL EQN_V%SOLVE(V, SV, SIGMA ,PH)
+      CALL EQN_W%SOLVE(W, SW, SIGMA ,PH)
+            
+      call DIV( OPX, OPY, OPZ, U, V, W, SFI, dg01, dg02 , dg03 )
+      SFI = SFI*1.5_DP/DT
+      
+      call EQN_P%SOLVE_POISSON(FI,SFI,NU_POISSON,PH)
+      
+      CALL GRAD(OPX, OPY, OPZ, FI, DG01, DG02, DG03)
+      
+      PRES = PRES + FI
+      
+      
+      is = get_is_b([0,0,0])
+      ie = get_ie_b([0,0,0])
+      FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+      U(I,J,K) = U(I,J,K) - DG01(I,J,K) * 2._DP*DT/3._DP
+      END FORALL
+      is = get_is_b([0,0,0])
+      ie = get_ie_b([0,0,0])
+      FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+      V(I,J,K) = V(I,J,K) - DG02(I,J,K) * 2._DP*DT/3._DP
+      END FORALL
+      is = get_is_b([0,0,0])
+      ie = get_ie_b([0,0,0])
+      FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+      W(I,J,K) = W(I,J,K) - DG03(I,J,K) * 2._DP*DT/3._DP 
+      END FORALL
+      
       
       ! check divergence 
       call DIV( OPX, OPY, OPZ, U, V, W, DG09, dg01, dg02 , dg03 )
@@ -291,115 +393,302 @@ program tcheby_1d
       endtime =  endtime-starttime
       CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
       
-            
-      call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
       
-
+      
+      DG01=W*W
+      CALL get_quadrature_hhi(quad,dg01,dg02,&
+      ph%xst,ph%xen,nx,ph%yst,ph%yen,ny,ph%zst,ph%zen,nz)
+      
+      W2 = DG02(PH%XST(1),PH%XST(2),PH%XST(3))
+      
+      call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
+      if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,dt,cfl,sqrt(w2),DIV_MAX,endtime
+      
+      !Saving U(t), V(t) and W(t) in the hdf5 format
+      
+       if (do_adj) then
+          if (memoire) then
+             SAVE_U(it_time,:,:,:) = U(:,:,:)
+             SAVE_V(it_time,:,:,:) = V(:,:,:)
+             SAVE_W(it_time,:,:,:) = W(:,:,:)
+             SAVE_T(it_time,:,:,:) = T(:,:,:)
+          else
+             write(num,'(I6.6)')it_time
+             filename = trim(base_save)//num//'.h5'
+             call save_hdf5(trim(FILENAME),MSH,U,V,W,T)
+          end if
+      end if
+      
+      
       !Calcul de J(u) = int_domaine <u,u> + <t,t>
       DG04 = U*U
       DG05 = V*V
       DG06 = W*W
+      DG07 = T*T
 
-      CALL integrate_spec(quad,DG04,J_U,PH,N(1),N(2),N(3),xmax,xmin)
-      CALL integrate_spec(quad,DG05,integ,PH,N(1),N(2),N(3),xmax,xmin)
-      J_U = integ + J_U
-      CALL integrate_spec(quad,DG06,integ,PH,N(1),N(2),N(3),xmax,xmin)
-      J_U = integ + J_U
+      CALL get_quadrature_hhi(quad,DG04,DG01,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+      CALL get_quadrature_hhi(quad,DG05,DG02,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+      CALL get_quadrature_hhi(quad,DG06,DG03,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+      CALL get_quadrature_hhi(quad,DG07,DG04,ph%xst,ph%xen,n(1),ph%yst,ph%yen,n(2),ph%zst,ph%zen,n(3))
+     J_U = (DG01(PH%XST(1),PH%XST(2),PH%XST(3)) + DG02(PH%XST(1),PH%XST(2),PH%XST(3)) + DG03(PH%XST(1),PH%XST(2),PH%XST(3)) + Ri*DG04(PH%XST(1),PH%XST(2),PH%XST(3)))*0.5_DP
 
-      if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,dt,cfl,DIV_MAX,endtime,J_U
+     if (rank==0) write(42,*)dt,J_U
       
-      if (rank==0) write(80,*)TC,J_U*0.5_DP
+      
+      if (cfl .GT. 10.) then
+         if (rank == 0) print'("CFL TOO BIG.")'
+         call MPI_FINALIZE(ierr)
+         stop
+      end if
+      
+      if (tc>=tmax) exit
 
 
-      !DG09 = u mode 0 en x -> u_bar
-      !DG08 = u mode 0 en x et y -> u_tilde
-      DGU = U
-      
-      call c2c_1m_x(DGU,plan_fwd_x)
-      DGV = 0._DP
-      DGV(1,:,:) = DGU(1,:,:)
-      DGW = DGV
-      call c2c_1m_x(DGV,plan_bck_x)
-      DG09 = DGV
-      
-      call transpose_x_to_y(DGW, DGU_Y)
-      call c2c_1m_y(DGU_Y,plan_fwd_y)
-      DGV_Y = 0._DP
-      DGV_Y(:,1,:) = DGU_Y(:,1,:)
-      call c2c_1m_y(DGV_Y,plan_bck_y)
-      call transpose_y_to_x(DGV_Y, DGU)
-      call c2c_1m_x(DGU,plan_bck_x)
-      DG08 = DGU
-      
-      !Calcul du lift-up et pushover
-      CALL GRAD( OPX, OPY, OPZ, DG09, DG01, DG02, DG03)
-      
-      DG04 = W*DG03*W*DG03
-      DG05 = V*DG02*V*DG02
-      
-      CALL integrate_spec(quad,DG04,lift,PH,N(1),N(2),N(3),xmax,xmin)
-      CALL integrate_spec(quad,DG05,push,PH,N(1),N(2),N(3),xmax,xmin)
-      err = MAXVAL(DG04)
-      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
-      if (rank==0) write(60,*)TC,lift,err
-      
-      err = MAXVAL(DG05)
-      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-
-      if (rank==0) write(50,*)TC,push,err
-      
-      
-      !Calcul de Orr spanwise + reste Orr
-      !Composante X
-      DG04 = u - DG09
-      CALL GRAD( OPX, OPY, OPZ, DG04, DG01, DG02, DG03)
-      
-      DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-      DG06 = DG08*DG01*DG08*DG01
-      
-      CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_span = orr
-      CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_reste = orr
-      err_span  = MAXVAL(DG05)
-      err_reste = MAXVAL(DG06)
-      
-      !Composnate Y
-      
-      CALL GRAD( OPX, OPY, OPZ, V, DG01, DG02, DG03)
-      
-      DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-      DG06 = DG08*DG01*DG08*DG01
-      
-      CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_span = orr_span + orr
-      CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_reste = orr_reste + orr
-      err_span  = MAX(err_span,MAXVAL(DG05))
-      err_reste = MAX(err_reste,MAXVAL(DG06))
-      
-      !Composante Z
-      
-      CALL GRAD( OPX, OPY, OPZ, W, DG01, DG02, DG03)
-      
-      DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-      DG06 = DG08*DG01*DG08*DG01
-      
-      CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_span = orr_span + orr
-      CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-      orr_reste = orr_reste + orr
-      err_span  = MAX(err_span,MAXVAL(DG05))
-      err_reste = MAX(err_reste,MAXVAL(DG06))
-         
-      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
-      if (rank==0) write(70,*)TC,orr_span,err_span
-      
-      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-      if (rank==0) write(110,*)TC,orr_reste,err_reste
-      
    end DO
    
+   CALL DUMP_HDF5_BASIC(file_dump,'WRITE',TC,DT,msh,u,v,w,Pres,T,dg09)
+   
+   
+   U_T = U
+   V_T = V
+   W_T = W
+   
+   
+   if (do_adj) then 
+      CALL EXPORT_GRID('output_dns/grid.h5',X,Y,Z)
+      filename = 'output_dns/grid.h5'
+      call date_and_time(TIME=timee)
+      filename = 'output_dns/snap_'//timee(1:2)//'H'//timee(3:4)//'.h5'
+
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         U_tot(I,J,K) = U(I,J,K) + Z(I,J,K)
+         T_tot(I,J,K) = T(I,J,K) - Z(I,J,K)
+      END FORALL
+      if (rank==0)print*,TRIM(FILENAME)
+      call EXPORT_snapshot(trim(FILENAME),u_tot,v,w,pres,T_tot)
+
+
+      if (rank == 0) then
+         write(6,'("--------------------------------------")')
+         write(6,'("          Adjoint looping")')
+         write(6,'("--------------------------------------")')
+      end if
+   
+      NU_MOMENTUM = 1._DP/Re*[1,1,1]!*0.5   ! changment de signe pour le problème adjoint
+      NU_POISSON  = 1.
+      dt = - dt                      ! DT < 0 pour remonter vers U0_tilde
+      NU_ENERGY = 1._DP/(Re*Pr)
+      !  TC = 0._DP
+      
+      CALL EQN_U_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
+      CALL EQN_U_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
+      CALL EQN_U_AD%INITIALISE( MSH, OPX, OPY, OPZ, PH )
+      CALL EQN_U_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+      
+      CALL EQN_V_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
+      CALL EQN_V_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
+      CALL EQN_V_AD%INITIALISE(MSH,OPX,OPY,OPZ,PH)
+      CALL EQN_V_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+   
+      CALL EQN_W_AD%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
+      CALL EQN_W_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
+      CALL EQN_W_AD%INITIALISE(MSH,OPX,OPY,OPZ,PH)
+      CALL EQN_W_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+      
+      CALL EQN_T_AD%SET_PARAMS( NU=NU_ENERGY , SIGMA=0D0 )
+      CALL EQN_T_AD%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
+      CALL EQN_T_AD%INITIALISE( MSH , OPX , OPY , OPZ , PH )
+      CALL EQN_T_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+      
+      CALL EQN_P_AD%SET_PARAMS( NU=NU_POISSON , SIGMA=0D0 )
+      CALL EQN_P_AD%SET_BCS( AXIS=3 , BCS_MINUS=NEUMANN , BCS_PLUS=NEUMANN )
+      CALL EQN_P_AD%INITIALISE(MSH,OPX,OPY,OPZ,PH)
+      CALL EQN_P_AD%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
+   
+   
+      !Restart
+      
+      !  TC = 0._DP
+   
+      U = 0._DP
+      V = 0._DP
+      W = 0._DP
+      T = 0._DP
+   
+      UM1 = U
+      VM1 = V
+      WM1 = W
+      TM1 = T
+      
+      PRES = 0._DP
+      if (memoire) then
+         DG04(:,:,:) = SAVE_U(nb_iter,:,:,:)
+         DG05(:,:,:) = SAVE_V(nb_iter,:,:,:)
+         DG06(:,:,:) = SAVE_W(nb_iter,:,:,:)
+         DG10(:,:,:) = SAVE_T(nb_iter,:,:,:)
+      else
+         write(num,'(I6.6)')nb_iter
+         filename = trim(base_save)//num//'.h5'
+         CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06,DG10)
+      end if
+
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         U_tot(I,J,K) = DG04(I,J,K) + Z(I,J,K)
+      END FORALL
+   
+      CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, DG05, DG06, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg07, dg08, dg09,DG10,DG11,DG12)
+
+
+      
+      NLUM1=NLU
+      NLVM1=NLV
+      NLWM1=NLW
+   
+   
+   
+      DO IT_time=1,nb_iter
+         
+         tc = tc + dt
+         snap_dt = snap_dt + dt
+      
+         starttime = MPI_Wtime();
+         
+         ! Récuperation de U(t),V(t) et W(t)
+         if (memoire) then
+            DG04(:,:,:) = SAVE_U(nb_iter-it_time+1,:,:,:)
+            DG05(:,:,:) = SAVE_V(nb_iter-it_time+1,:,:,:)
+            DG06(:,:,:) = SAVE_W(nb_iter-it_time+1,:,:,:)
+            DG10(:,:,:) = SAVE_T(nb_iter-it_time,:,:,:)
+         else
+            write(num,'(I6.6)')nb_iter-it_time+1
+            filename = trim(base_save)//num//'.h5'
+            CALL IMPORT_HDF5(FILENAME,msh,DG04,DG05,DG06,DG10)
+         end if
+
+         FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+            U_tot(I,J,K) = DG04(I,J,K) + Z(I,J,K)
+         END FORALL
+
+
+         CALL COMPUTE_STRAT_ADJOINT_NON_LINEAR_TERMS(opx,opy,opz, u_tot, DG05, DG06, t, nlt, dg01, dg02, dg03)
+         
+         ST = (2._DP*T-0.5_DP*TM1)/DT + ALPHA_BUOY*W - 2._DP*NLT + NLTM1 - 2._DP*DG10
+         
+         TM1 = T
+         NLTM1 = NLT
+         
+         CALL EQN_T_AD%SOLVE(T, ST, SIGMA, pH)
+
+         if (memoire) then
+            DG07(:,:,:) = SAVE_U(nb_iter-it_time,:,:,:)
+            DG08(:,:,:) = SAVE_V(nb_iter-it_time,:,:,:)
+            DG09(:,:,:) = SAVE_W(nb_iter-it_time,:,:,:)
+         else
+            write(num,'(I6.6)')nb_iter-it_time
+            filename = trim(base_save)//num//'.h5'
+            CALL IMPORT_HDF5(FILENAME,msh,DG07,DG08,DG09,DG10)
+         end if
+         
+         CALL GRAD(&
+              OPX, OPY, OPZ, PRES, DG01,DG02, DG03)
+          
+      
+         SU = (2._DP*U-0.5_DP*UM1)/DT - DG01 - 2._DP*DG07
+         SV = (2._DP*V-0.5_DP*VM1)/DT - DG02 - 2._DP*DG08
+         SW = (2._DP*W-0.5_DP*WM1)/DT - DG03 - 2._DP*DG09
+         
+         FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+            T_tot(I,J,K) = DG10(I,J,K) - Z(I,J,K)
+         END FORALL
+
+
+
+         CALL GRAD(OPX,OPY,OPZ,T_tot,DG01,DG02,DG03)
+         
+
+         !Calcul de \tilde{T} (\nabla T)
+         SU = SU + T*DG01
+         SV = SV + T*DG02
+         SW = SW + T*DG03
+
+      
+         CALL COMPUTE_ADJOINT_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, DG05, DG06, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg10, dg11, dg07, dg08, dg09)
+         
+         SU = SU - 2._DP*NLU + NLUM1
+         SV = SV - 2._DP*NLV + NLVM1
+         SW = SW - 2._DP*NLW + NLWM1
+         
+         UM1=U
+         VM1=V
+         WM1=W
+      
+         NLUM1 = NLU
+         NLVM1 = NLV
+         NLWM1 = NLW
+      
+         SIGMA = 1.5_DP/DT
+      
+         CALL EQN_U_AD%SOLVE(U, SU, SIGMA ,PH)
+         CALL EQN_V_AD%SOLVE(V, SV, SIGMA ,PH)
+         CALL EQN_W_AD%SOLVE(W, SW, SIGMA ,PH)
+               
+         call DIV( OPX, OPY, OPZ, U, V, W, SFI, dg01, dg02 , dg03 )
+         SFI = SFI*1.5_DP/DT
+         
+         call EQN_P_AD%SOLVE_POISSON(FI,SFI,NU_POISSON,PH)
+         
+         CALL GRAD(OPX, OPY, OPZ, FI, DG01, DG02, DG03)
+         
+         PRES = PRES + FI
+         
+         is = get_is_b([0,0,0])
+         ie = get_ie_b([0,0,0])
+         FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+            U(I,J,K) = U(I,J,K) - DG01(I,J,K) * 2._DP*DT/3._DP
+         END FORALL
+         is = get_is_b([0,0,0])
+         ie = get_ie_b([0,0,0])
+         FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+            V(I,J,K) = V(I,J,K) - DG02(I,J,K) * 2._DP*DT/3._DP
+         END FORALL
+         is = get_is_b([0,0,0])
+         ie = get_ie_b([0,0,0])
+         FORALL(I=IS(1):IE(1),J=IS(2):IE(2),K=IS(3):IE(3))
+            W(I,J,K) = W(I,J,K) - DG03(I,J,K) * 2._DP*DT/3._DP 
+         END FORALL
+      
+
+      
+         ! check divergence 
+         call DIV( OPX, OPY, OPZ, U, V, W, DG09, dg01, dg02 , dg03 )
+         is = get_is()
+         ie = get_ie()
+         DIV_MAX = MAXVAL(ABS(DG09(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3))))     
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         
+         call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
+         call GetCFL(msh(1),msh(2),msh(3), NLU, NLV, NLW, dt, nl_cfl)
+         
+         endtime   = MPI_Wtime();
+         endtime =  endtime-starttime
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,endtime,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         if (rank==0) print'(i9,10(1x,e15.8))',it_time,tc,nl_cfl,dt,cfl,DIV_MAX,endtime
+         
+         if (cfl .GT. 10.) exit
+         
+         
+      end DO
+
+      !Ecriture du gradient
+      FILENAME = TRIM(root_dir)//'grad.h5'
+      call save_hdf5(trim(FILENAME),MSH,U,V,W,T)
+      
+      CALL MPI_BARRIER(MPI_COMM_WORLD,IERR)
+
+   END if
+
+
+
    CALL MPI_FINALIZE(ierr)
    STOP
    
@@ -558,6 +847,7 @@ program tcheby_1d
       call alloc_x(W_T   , OPT_GLOBAL=.TRUE.) ; W_T = 0
 
       call alloc_x(U_tot , OPT_GLOBAL=.TRUE.) ; U_tot = 0 
+      call alloc_x(T_tot , OPT_GLOBAL=.TRUE.) ; T_tot = 0
       
       call alloc_x(PRES , OPT_GLOBAL=.TRUE.) ; PRES = 0
       call alloc_x(FI   , OPT_GLOBAL=.TRUE.) ; FI = 0
@@ -578,44 +868,77 @@ program tcheby_1d
       call alloc_x(NLW , OPT_GLOBAL=.TRUE.) ; NLW = 0
       call alloc_x(LW  , OPT_GLOBAL=.TRUE.) ; LW = 0
       
+      call alloc_x(T   , OPT_GLOBAL=.TRUE.) ; T = 0
+      call alloc_x(NLT   , OPT_GLOBAL=.TRUE.) ; NLT = 0
+      call alloc_x(ST   , OPT_GLOBAL=.TRUE.) ; ST = 0
+      
       call alloc_x(X  , OPT_GLOBAL=.TRUE.) ; X = 0
       call alloc_x(Y  , OPT_GLOBAL=.TRUE.) ; Y = 0
       call alloc_x(Z  , OPT_GLOBAL=.TRUE.) ; Z = 0
       
+      call alloc_x(DJ_U_ADJ  , OPT_GLOBAL=.TRUE.) ; DJ_U_ADJ = 0
+      call alloc_x(DJ_V_ADJ  , OPT_GLOBAL=.TRUE.) ; DJ_V_ADJ = 0
+      call alloc_x(DJ_W_ADJ  , OPT_GLOBAL=.TRUE.) ; DJ_W_ADJ = 0
+      
       call alloc_x(NOISE_U  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(NOISE_V  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(NOISE_W  , OPT_GLOBAL=.TRUE.) 
+      call alloc_x(NOISE_T  , OPT_GLOBAL=.TRUE.) 
       
       call alloc_x(UM1  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(VM1  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(WM1  , OPT_GLOBAL=.TRUE.) 
+      call alloc_x(TM1  , OPT_GLOBAL=.TRUE.) 
       
       call alloc_x(NLUM1  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(NLVM1  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(NLWM1  , OPT_GLOBAL=.TRUE.)
+      call alloc_x(NLTM1  , OPT_GLOBAL=.TRUE.) 
       
       call alloc_x(U_0  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(V_0  , OPT_GLOBAL=.TRUE.) 
       call alloc_x(W_0  , OPT_GLOBAL=.TRUE.) 
+      call alloc_x(T_0  , OPT_GLOBAL=.TRUE.) 
       
+      call alloc_x(DU_0  , OPT_GLOBAL=.TRUE.) 
+      call alloc_x(DV_0  , OPT_GLOBAL=.TRUE.) 
+      call alloc_x(DW_0  , OPT_GLOBAL=.TRUE.) 
       
-      call alloc_x(DGU , OPT_GLOBAL=.TRUE.) ; DGU = 0._DP
-      call alloc_x(DGV , OPT_GLOBAL=.TRUE.) ; DGV = 0._DP
-      call alloc_x(DGW , OPT_GLOBAL=.TRUE.) ; DGW = 0._DP
-      
-      call alloc_y(DGU_Y , OPT_GLOBAL=.TRUE.) ; DGU_Y = 0._DP
-      call alloc_y(DGV_Y , OPT_GLOBAL=.TRUE.) ; DGV_Y = 0._DP
-      call alloc_y(DGW_Y , OPT_GLOBAL=.TRUE.) ; DGW_Y = 0._DP
-
-      ALLOCATE(SP_X(0:N(1)/2 -1))
-      ALLOCATE(SP_Z(0:N(2)/2 -1))
       
       FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
       X(I,J,K) = MSH(1)%X(I)
       Y(I,J,K) = MSH(2)%X(J)
       Z(I,J,K) = MSH(3)%X(K)
       END FORALL
-
+      
+      IS = GET_IS()
+      IE = GET_IE()
+      
+      NOISE_U = 0._DP
+      NOISE_V = 0._DP
+      NOISE_W = 0._DP
+      NOISE_T= 0._DP
+      
+      CALL RANDOM_SEED()
+      CALL Random_Number(NOISE_U(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+      CALL Random_Number(NOISE_V(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+      CALL Random_Number(NOISE_W(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+      CALL Random_Number(NOISE_T(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
+      
+      NOISE = 1E-1
+      
+      U = (2._dp*NOISE_U - 1._dp)*NOISE
+      V = (2._dp*NOISE_V - 1._dp)*NOISE
+      W = (2._dp*NOISE_W - 1._dp)*NOISE
+      T = (2._dp*NOISE_T - 1._dp)*NOISE
+      
+      CALL normalize(quad,U,U_0,PH,N)
+      CALL normalize(quad,V,V_0,PH,N)
+      CALL normalize(quad,W,W_0,PH,N)
+      CALL normalize(quad,T,T_0,PH,N)
+      
+      
+      
    end subroutine preproc
    
    
@@ -761,165 +1084,5 @@ subroutine export_tecplot(FILENAME,X,Y,Z,FI)
    
    close(id)
 end subroutine export_tecplot
-
-subroutine dealiazing(u,v,w)
-    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:) :: U,v,w
-    integer :: i,nx,ny,nz
-
-    nx = N(1)
-    ny = N(2)
-    nz = N(3)
-    
-    DGU = U
-    DGV = V
-    DGW = W
-
-    
-    call c2c_1m_x(DGU,plan_fwd_x)
-    call c2c_1m_x(DGV,plan_fwd_x)
-    call c2c_1m_x(DGW,plan_fwd_x)
-
-    DGU(1+(NX+1)/3:NX+1 - (NX+1)/3, :, :) = 0._DP
-    DGV(1+(NX+1)/3:NX+1 - (NX+1)/3, :, :) = 0._DP
-    DGW(1+(NX+1)/3:NX+1 - (NX+1)/3, :, :) = 0._DP
-    
-    call c2c_1m_x(DGU,plan_bck_x)
-    call c2c_1m_x(DGV,plan_bck_x)
-    call c2c_1m_x(DGW,plan_bck_x)
-
-    call transpose_x_to_y(DGU, DGU_Y)
-    call transpose_x_to_y(DGV, DGV_Y)
-    call transpose_x_to_y(DGW, DGW_Y)
-    
-    call c2c_1m_y(DGU_Y,plan_fwd_y)
-    call c2c_1m_y(DGV_Y,plan_fwd_y)
-    call c2c_1m_y(DGW_Y,plan_fwd_y)
-
-    DGU_Y(:,1+(NY+1)/3:NY+1 - (NY+1)/3, :) = 0._DP
-    DGV_Y(:,1+(NY+1)/3:NY+1 - (NY+1)/3, :) = 0._DP
-    DGW_Y(:,1+(NY+1)/3:NY+1 - (NY+1)/3, :) = 0._DP
-
-    call c2c_1m_y(DGU_Y,plan_bck_y)
-    call c2c_1m_y(DGV_Y,plan_bck_y)
-    call c2c_1m_y(DGW_Y,plan_bck_y)
-
-    call transpose_y_to_x(DGU_Y, DGU)
-    call transpose_y_to_x(DGV_Y, DGV)
-    call transpose_y_to_x(DGW_Y, DGW)
-
-    U = DGU
-    V = DGV
-    W = DGW
-    
-    
-  end subroutine dealiazing
-
-  SUBROUTINE streamwise_mod(UA,UZ,UR,E_azi,max_mod)
-    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: UA,UZ,UR
-    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_azi
-    INTEGER,intent(in) :: max_mod
-
-    type(C_PTR) :: plan
-    INTEGER :: m
-
-    DGU = UA
-    DGV = UZ
-    DGW = UR
-    
-    call c2c_1m_x(DGU,plan_fwd_x)
-    call c2c_1m_x(DGV,plan_fwd_x)
-    call c2c_1m_x(DGW,plan_fwd_x)
-
-    E_azi = 0._DP
-    do m = 0,max_mod-1
-       do k = PH%XST(3), PH%XEN(3)
-          do j = PH%XST(2), PH%XEN(2)
-             E_azi(m) = E_azi(m) + ABS(DGU(m+1,j,k))**2 + ABS(DGV(m+1,j,k))**2 + ABS(DGW(m+1,j,k))**2
-          end do
-       end do
-    end do
-
-    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_azi,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
-    
-  end SUBROUTINE streamwise_mod
-
-
-  SUBROUTINE zwise_mod(UA,UZ,UR,E_ver,max_mod)
-    REAL(DP),ALLOCATABLE,DIMENSION(:,:,:),intent(in) :: UA,UZ,UR
-    REAL(DP),DIMENSION(0:max_mod-1),intent(out) :: E_ver
-    INTEGER,intent(in) :: max_mod
-
-    type(C_PTR) :: plan
-    INTEGER :: m
-    
-    DGU = UA
-    DGV = UZ
-    DGW = UR
-
-    call transpose_x_to_y(DGU, DGU_Y)
-    call transpose_x_to_y(DGV, DGV_Y)
-    call transpose_x_to_y(DGW, DGW_Y)
-    
-    call c2c_1m_y(DGU_Y,plan_fwd_y)
-    call c2c_1m_y(DGV_Y,plan_fwd_y)
-    call c2c_1m_y(DGW_Y,plan_fwd_y)
-
-    E_ver = 0._DP
-    do m = 0,max_mod-1
-       do k = PH%YST(3), PH%YEN(3)
-          do i = PH%YST(1), PH%YEN(1)
-             E_ver(m) = E_ver(m) + ABS(DGU_Y(i,m+1,k))**2 + ABS(DGV_Y(i,m+1,k))**2 + ABS(DGW_Y(i,m+1,k))**2
-          end do
-       end do
-    end do
-
-    CALL MPI_ALLREDUCE(MPI_IN_PLACE,E_ver,max_mod,MPI_REAL8,MPI_SUM,MPI_COMM_WORLD,IERR)
-
-  end SUBROUTINE zwise_mod
-
-      SUBROUTINE IMPORT_HDF5_INIT_SNAP(FILENAME,u1,u2,u3)
-    use decomp_2d
-    use m_mesh_base
-    use mpi
-    implicit none
-    CHARACTER(len=*)                          :: FILENAME
-    REAL(KIND=8),dimension(:,:,:),allocatable :: u1,u2,u3
-    
-    !> VARS...
-    INTEGER :: INFO,IERR
-    INTEGER(KIND=HID_T) :: P_ID, F_ID, X_ID
-    INTEGER, DIMENSION(3) :: IS_GLB,IE_GLB
-    INTEGER, DIMENSION(3) :: IS_LOC,IE_LOC
-    TYPE(DECOMP_INFO) :: ph
-    
-    CALL GET_DECOMP_INFO(PH)
-    
-    is_glb(1:3) = [ ph%xst(1) ,ph%yst(2) , ph%zst(3) ] 
-    ie_glb(1:3) = [ ph%xen(1) ,ph%yen(2) , ph%zen(3) ] 
-    
-    is_loc(1:3) = [ ph%xst(1) ,ph%xst(2) , ph%xst(3) ]
-    ie_loc(1:3) = [ ph%xen(1) ,ph%xen(2) , ph%xen(3) ] 
-    
-    
-    CALL MPI_INFO_CREATE( INFO, IERR )
-    CALL H5PCREATE_F( H5P_FILE_ACCESS_F, P_ID, IERR )
-    CALL H5PSET_FAPL_MPIO_F( P_ID, MPI_COMM_WORLD, INFO, IERR )
-    
-    CALL H5FOPEN_F(FILENAME, H5F_ACC_RDWR_F, F_ID, IERR,ACCESS_PRP = P_ID)
-    CALL H5PCREATE_F(H5P_DATASET_XFER_F, X_ID, IERR)
-    CALL H5PSET_DXPL_MPIO_F(X_ID, H5FD_MPIO_COLLECTIVE_F, IERR)
-    
-    
-    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u1',u1  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
-    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u2',u2  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
-    CALL READ_ARRAY_RANK_3( F_ID, X_ID,'/u3',u3  , IS_GLB, IE_GLB, IS_LOC, IE_LOC )
-    
-    CALL H5PCLOSE_F( X_ID, IERR )
-    CALL H5FCLOSE_F( F_ID, IERR )
-    CALL H5PCLOSE_F( P_ID, IERR )
-    
-    
-  END SUBROUTINE IMPORT_HDF5_INIT_SNAP
-
 
 end program tcheby_1d

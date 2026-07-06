@@ -18,7 +18,7 @@ module m_lap1d_tcheby
 contains
   
   subroutine init_lap1d_tcheby(this,op,nu,alpha_L,beta_L,alpha_R,beta_R,n)
-    use m_operator_tcheby
+    use m_operator_tcheby, only: t_operator_tcheby
     implicit none
     !.. Args
     class(t_lap1d_tcheby ),target,intent(out)   ::  this

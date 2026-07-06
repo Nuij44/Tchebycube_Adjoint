@@ -3,7 +3,7 @@ module m_solver_diag_cart_ttt
   use m_solver_diag_base
   use m_lap1d_tcheby
   use m_boundary_conditions
-use m_operator_tcheby
+use m_operator_tcheby, only: t_operator_tcheby
   use decomp_2d_fft
   use decomp_2d_mpi
   implicit none
