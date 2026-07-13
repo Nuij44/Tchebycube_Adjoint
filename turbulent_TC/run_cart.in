@@ -5,8 +5,8 @@ nz = 256 ,
 x_max = 4.35, !* pi
 y_max = 1.05 ,!* pi
 z_max = 1. ,  
-nb_cpu_y = 8 ,
-nb_cpu_z = 12
+nb_cpu_y = 1 ,
+nb_cpu_z = 1
 /
 
 

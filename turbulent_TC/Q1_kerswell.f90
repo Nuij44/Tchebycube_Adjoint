@@ -130,11 +130,19 @@ program tcheby_1d
       ierr = SYSTEM('mkdir -p output_couette')
       write(*,parameters_cube)
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
-      OPEN(UNIT=50, FILE='output_couette/Pushover.dat')
-      OPEN(UNIT=60, FILE='output_couette/Liftup.dat')
-      OPEN(UNIT=110, FILE='output_couette/Orr_reste.dat')
-      OPEN(UNIT=70, FILE='output_couette/Orr_span.dat')
-      OPEN(UNIT=80, FILE='output_couette/L2_nrj.dat')
+      OPEN(UNIT=50, FILE='Post/Pushover.dat')
+      OPEN(UNIT=60, FILE='Post/Liftup.dat')
+      OPEN(UNIT=61, FILE='Post/Liftup_rotated.dat')
+      OPEN(UNIT=62, FILE='Post/Liftup_rotated_inv.dat')
+      OPEN(UNIT=110, FILE='Post/Orr_reste.dat')
+      OPEN(UNIT=111, FILE='Post/x_Orr_reste.dat')
+      OPEN(UNIT=112, FILE='Post/y_Orr_reste.dat')
+      OPEN(UNIT=113, FILE='Post/z_Orr_reste.dat')
+      OPEN(UNIT=70, FILE='Post/Orr_span.dat')
+      OPEN(UNIT=71, FILE='Post/x_Orr_span.dat')
+      OPEN(UNIT=72, FILE='Post/y_Orr_span.dat')
+      OPEN(UNIT=73, FILE='Post/z_Orr_span.dat')
+      OPEN(UNIT=80, FILE='Post/L2_nrj.dat')
    end if
    
    
@@ -277,8 +285,17 @@ program tcheby_1d
 
    call dealiazing(u,v,w)
    
-   !CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
-   CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+   CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+
+   CALL OPX%D1(U,DG01)
+   CALL OPX%D1(V,DG02)
+   CALL OPX%D1(W,DG03)
+   
+   NLU = NLU + W + Z*DG01
+   NLV = NLV + Z*DG02
+   NLW = NLW + Z*DG03
+
+   !CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
    
    NLUM1=NLU
@@ -286,6 +303,11 @@ program tcheby_1d
    NLWM1=NLW
  
    DO IT_time=1,nb_iter
+
+      !pas de temps adaptatif
+      call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
+      CALL UPDATE_DT(dt,CFL,0.2)
+      
       
       tc = tc + dt
       snap_dt = snap_dt + dt
@@ -311,9 +333,17 @@ program tcheby_1d
      
       call dealiazing(u,v,w)
       
-!      CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
-      CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+      CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
+      !CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
+      CALL OPX%D1(U,DG01)
+      CALL OPX%D1(V,DG02)
+      CALL OPX%D1(W,DG03)
+      
+      NLU = NLU - W - Z*DG01
+      NLV = NLV - Z*DG02
+      NLW = NLW - Z*DG03
+      
       !ajout de la rotation
       NLU = NLU + q*WM1
       NLW = NLW - q*UM1
@@ -427,19 +457,19 @@ program tcheby_1d
          
          DG04 = W*DG03*W*DG03
          DG05 = V*DG02*V*DG02
-
+      
          CALL integrate_spec(quad,DG04,lift,PH,N(1),N(2),N(3),xmax,xmin)
          CALL integrate_spec(quad,DG05,push,PH,N(1),N(2),N(3),xmax,xmin)
          err = MAXVAL(DG04)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
          if (rank==0) write(60,*)TC,lift,err
-
+         
          err = MAXVAL(DG05)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-
+      
          if (rank==0) write(50,*)TC,push,err
-
          
+      
          !Calcul de Orr spanwise + reste Orr
          !Composante X
          DG04 = u - DG09
@@ -454,23 +484,40 @@ program tcheby_1d
          orr_reste = orr
          err_span  = MAXVAL(DG05)
          err_reste = MAXVAL(DG06)
-
+         
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
+         if (rank==0) write(71,*)TC,orr_span,err_span
+         
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         if (rank==0) write(111,*)TC,orr_reste,err_reste
+         
+         
          !Composnate Y
          
          CALL GRAD( OPX, OPY, OPZ, V, DG01, DG02, DG03)
          
          DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
          DG06 = DG08*DG01*DG08*DG01
-         
+      
          CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_span = orr_span + orr
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         err = maxval(DG05)
+         if (rank==0) write(72,*)TC,orr,err
+         
          CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_reste = orr_reste + orr
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         err = maxval(DG06)
+         if (rank==0) write(112,*)TC,orr,err
+         
          err_span  = MAX(err_span,MAXVAL(DG05))
          err_reste = MAX(err_reste,MAXVAL(DG06))
-
+         
+      
+      
          !Composante Z
-
+         
          CALL GRAD( OPX, OPY, OPZ, W, DG01, DG02, DG03)
          
          DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
@@ -478,16 +525,35 @@ program tcheby_1d
 
          CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_span = orr_span + orr
+         err = maxval(DG05)
+         if (rank==0) write(73,*)TC,orr,err
+         
          CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_reste = orr_reste + orr
+         err = maxval(DG06)
+         if (rank==0) write(113,*)TC,orr,err
+         
          err_span  = MAX(err_span,MAXVAL(DG05))
          err_reste = MAX(err_reste,MAXVAL(DG06))
          
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
          if (rank==0) write(70,*)TC,orr_span,err_span
-
+         
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
          if (rank==0) write(110,*)TC,orr_reste,err_reste
+         
+         !Rotated Lift-up (-qV) et inverse (qU)
+         
+         DG05 = q*V*q*V
+         DG06 = q*U*q*U
+         
+         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
+         err = maxval(DG05)
+         if (rank==0) write(61,*)TC,orr,err
+         
+         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
+         err = maxval(DG06)
+         if (rank==0) write(62,*)TC,orr,err
          
       end if
       
@@ -505,7 +571,7 @@ program tcheby_1d
          write(90,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_x
          
          write(form,'(i3)')n(2)/2
-         write(100,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z
+         write(99,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z
 
       end if
       
@@ -762,7 +828,7 @@ program tcheby_1d
       CALL Random_Number(NOISE_V(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       CALL Random_Number(NOISE_W(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       
-      NOISE = 0.1_DP!5E-1
+      NOISE = 1E-2!5E-1
       
       U = (2._dp*NOISE_U - 1._dp)*NOISE 
       V = (2._dp*NOISE_V - 1._dp)*NOISE
@@ -779,8 +845,8 @@ program tcheby_1d
 
  !     CALL IMPORT_HDF5_INIT_SNAP(TRIM(data_start),U,V,W)
 
-      U = U - Z
-      call dealiazing(u,v,w)
+!      U = U - Z
+!      call dealiazing(u,v,w)
       
       DG04 = U*U
       DG05 = V*V
@@ -1101,5 +1167,44 @@ subroutine dealiazing(u,v,w)
     
   END SUBROUTINE IMPORT_HDF5_INIT_SNAP
 
+
+  subroutine update_dt(dt_inout,cfl_current,cfl_target)
+    real(dp), intent(inout)        :: dt_inout
+    real(dp), intent(in)           :: cfl_current
+    real(dp), intent(in)           :: cfl_target
+    real(dp),parameter             :: dt_min = 1E-12
+    real(dp),parameter             :: dt_max = 0.5
+    
+    ! Controller parameters
+    real(dp), parameter :: eps_cfl    = 1.0e-14_dp  ! below this CFL is considered zero
+    real(dp), parameter :: grow_max   = 1.1_dp       ! max 10 % increase per step
+    real(dp), parameter :: shrink_max = 0.5_dp       ! max 50 % decrease per step
+    real(dp), parameter :: deadband   = 0.05_dp      ! no action if |ratio-1| < 5 %
+    real(dp), parameter :: alpha      = 0.5_dp       ! damping exponent
+    
+    real(dp) :: ratio, fac, dt_new
+
+
+    
+    ! --- Guard: CFL vanishingly small, keep current dt ---
+    if (cfl_current <= eps_cfl) return
+    
+    ratio = cfl_current / cfl_target
+    
+    ! --- Dead-band: avoid jitter when CFL is already close to target ---
+    if (abs(ratio - 1.0_dp) <= deadband) return
+    
+    ! --- Damped proportional controller ---
+    fac    = (1.0_dp / ratio)**alpha          ! = (CFL_target/CFL_current)^alpha
+    fac    = min(grow_max, max(shrink_max, fac))
+    dt_new = fac * dt_inout
+    
+    ! --- Hard bounds ---
+    dt_new = min(dt_new, dt_max)
+    dt_new = max(dt_new, dt_min)
+    
+    dt_inout = dt_new
+    
+  end subroutine update_dt
 
 end program tcheby_1d

@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --account=c2017511
-#SBATCH --constraint=GENOA
+#SBATCH --constraint=HPDA
 #SBATCH --job-name=Q1_Lesur
 #SBATCH --nodes=1
 #SBATCH --ntasks=96
-#SBATCH --time=1-00:00:00
+#SBATCH --time=5:00:00
 #SBATCH --output=Q1_Lesur%j.out
 #SBATCH --error=error_Q1_Lesur%j.out
 #SBATCH --exclusive

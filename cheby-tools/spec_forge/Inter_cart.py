@@ -66,8 +66,8 @@ if __name__ == "__main__":
     
     ope = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, -1.0],
-        xmax=[4.35*np.pi, 1.05*np.pi, 1.0],
-        n=[129,65,257],
+        xmax=[1.75*np.pi, 1.2*np.pi, 1.0],
+        n=[129,97,257],
         bases=["fourier", "fourier","chebyshev"]
     )
     i=0

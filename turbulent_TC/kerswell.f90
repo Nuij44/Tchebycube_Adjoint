@@ -132,8 +132,16 @@ program tcheby_1d
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
       OPEN(UNIT=50, FILE='output_couette/Pushover.dat')
       OPEN(UNIT=60, FILE='output_couette/Liftup.dat')
+      OPEN(UNIT=61, FILE='Post/Liftup_rotated.dat')
+      OPEN(UNIT=62, FILE='Post/Liftup_rotated_inv.dat')
       OPEN(UNIT=110, FILE='output_couette/Orr_reste.dat')
+      OPEN(UNIT=111, FILE='output_couette/x_Orr_reste.dat')
+      OPEN(UNIT=112, FILE='output_couette/y_Orr_reste.dat')
+      OPEN(UNIT=113, FILE='output_couette/z_Orr_reste.dat')
       OPEN(UNIT=70, FILE='output_couette/Orr_span.dat')
+      OPEN(UNIT=71, FILE='output_couette/x_Orr_span.dat')
+      OPEN(UNIT=72, FILE='output_couette/y_Orr_span.dat')
+      OPEN(UNIT=73, FILE='output_couette/z_Orr_span.dat')
       OPEN(UNIT=80, FILE='output_couette/L2_nrj.dat')
    end if
    
@@ -235,7 +243,7 @@ program tcheby_1d
    CALL EQN_U%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
    CALL EQN_U%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
    CALL EQN_U%INITIALISE( MSH, OPX, OPY, OPZ, PH )
-   CALL EQN_U%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_plus , UDF_PLUS=UDF_minus )
+   CALL EQN_U%SET_BVS( MESH = MSH , AXIS=3 , UDF_MINUS=UDF_NULL , UDF_PLUS=UDF_NULL )
    
    CALL EQN_V%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
    CALL EQN_V%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
@@ -278,6 +286,13 @@ program tcheby_1d
    
    CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
+   CALL OPX%D1(U,DG01)
+   CALL OPX%D1(V,DG02)
+   CALL OPX%D1(W,DG03)
+   
+   NLU = NLU + W + Z*DG01
+   NLV = NLV + Z*DG02
+   NLW = NLW + Z*DG03
    
    NLUM1=NLU
    NLVM1=NLV
@@ -311,6 +326,14 @@ program tcheby_1d
       
       CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
+      CALL OPX%D1(U,DG01)
+      CALL OPX%D1(V,DG02)
+      CALL OPX%D1(W,DG03)
+      
+      NLU = NLU + W + Z*DG01
+      NLV = NLV + Z*DG02
+      NLW = NLW + Z*DG03
+      
       !ajout de la rotation
       NLU = NLU + q*WM1
       NLW = NLW - q*UM1
@@ -398,18 +421,19 @@ program tcheby_1d
       if (rank==0) write(80,*)TC,J_U*0.5_DP
 
 
-      if (mod(it_time,100)==0) then
+      if (mod(it_time,1000)==0) then
          !DG09 = u mode 0 en x -> u_bar
          !DG08 = u mode 0 en x et y -> u_tilde
+
          DGU = U
-    
+         
          call c2c_1m_x(DGU,plan_fwd_x)
          DGV = 0._DP
          DGV(1,:,:) = DGU(1,:,:)
          DGW = DGV
          call c2c_1m_x(DGV,plan_bck_x)
          DG09 = DGV
-
+         
          call transpose_x_to_y(DGW, DGU_Y)
          call c2c_1m_y(DGU_Y,plan_fwd_y)
          DGV_Y = 0._DP
@@ -418,24 +442,24 @@ program tcheby_1d
          call transpose_y_to_x(DGV_Y, DGU)
          call c2c_1m_x(DGU,plan_bck_x)
          DG08 = DGU
-
+         
          !Calcul du lift-up et pushover
          CALL GRAD( OPX, OPY, OPZ, DG09, DG01, DG02, DG03)
          
          DG04 = W*DG03*W*DG03
          DG05 = V*DG02*V*DG02
-
+         
          CALL integrate_spec(quad,DG04,lift,PH,N(1),N(2),N(3),xmax,xmin)
          CALL integrate_spec(quad,DG05,push,PH,N(1),N(2),N(3),xmax,xmin)
          err = MAXVAL(DG04)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
          if (rank==0) write(60,*)TC,lift,err
-
+         
          err = MAXVAL(DG05)
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-
+         
          if (rank==0) write(50,*)TC,push,err
-
+         
          
          !Calcul de Orr spanwise + reste Orr
          !Composante X
@@ -451,7 +475,14 @@ program tcheby_1d
          orr_reste = orr
          err_span  = MAXVAL(DG05)
          err_reste = MAXVAL(DG06)
-
+         
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
+         if (rank==0) write(71,*)TC,orr_span,err_span
+         
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         if (rank==0) write(111,*)TC,orr_reste,err_reste
+         
+         
          !Composnate Y
          
          CALL GRAD( OPX, OPY, OPZ, V, DG01, DG02, DG03)
@@ -461,30 +492,60 @@ program tcheby_1d
          
          CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_span = orr_span + orr
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         err = maxval(DG05)
+         if (rank==0) write(72,*)TC,orr,err
+      
          CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_reste = orr_reste + orr
+         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+         err = maxval(DG06)
+         if (rank==0) write(112,*)TC,orr,err
+         
          err_span  = MAX(err_span,MAXVAL(DG05))
          err_reste = MAX(err_reste,MAXVAL(DG06))
 
+      
+      
          !Composante Z
-
-         CALL GRAD( OPX, OPY, OPZ, W, DG01, DG02, DG03)
          
+         CALL GRAD( OPX, OPY, OPZ, W, DG01, DG02, DG03)
+      
          DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
          DG06 = DG08*DG01*DG08*DG01
-
+         
          CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_span = orr_span + orr
+         err = maxval(DG05)
+         if (rank==0) write(73,*)TC,orr,err
+         
          CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
          orr_reste = orr_reste + orr
+         err = maxval(DG06)
+         if (rank==0) write(113,*)TC,orr,err
+         
          err_span  = MAX(err_span,MAXVAL(DG05))
          err_reste = MAX(err_reste,MAXVAL(DG06))
          
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)        
          if (rank==0) write(70,*)TC,orr_span,err_span
-
+         
          CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
          if (rank==0) write(110,*)TC,orr_reste,err_reste
+
+         !Rotated Lift-up (-qV) et inverse (qU)
+         
+         DG05 = q*V*q*V
+         DG06 = q*U*q*U
+         
+         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
+         err = maxval(DG05)
+         if (rank==0) write(61,*)TC,orr,err
+         
+         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
+         err = maxval(DG06)
+         if (rank==0) write(62,*)TC,orr,err
+         
          
       end if
       

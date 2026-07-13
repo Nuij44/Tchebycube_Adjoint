@@ -1,7 +1,7 @@
 &parameters_cube
-nx = 256 ,
-ny = 128 ,
-nz = 516 ,
+nx = 64 ,
+ny = 64 ,
+nz = 64 ,
 x_max = 1.75, !* pi
 y_max = 1.2 ,!* pi
 z_max = 1. ,  
@@ -18,7 +18,7 @@ q = 1.,
 
 &parameters_timescheme
 tmax = 1000 ,
-dt = 1E-4 ,
+dt = 1E-3 ,
 cfl = 0.5 ,
 root_dir = 'outdir/'
 dn_dump = 1000,
