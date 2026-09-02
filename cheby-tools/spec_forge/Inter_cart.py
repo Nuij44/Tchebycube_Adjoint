@@ -49,7 +49,7 @@ if __name__ == "__main__":
     
     ops = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, -1.0],
-        xmax=[4.35*np.pi,1.05*np.pi, 1.0],
+        xmax=[3.5*np.pi,2.4*np.pi, 1.0],
         n=np.shape(x),
         bases=["fourier", "fourier","chebyshev"]
     )
@@ -66,8 +66,8 @@ if __name__ == "__main__":
     
     ope = sp.SpectralDiscretization(
         xmin=[0.0, 0.0, -1.0],
-        xmax=[4.35*np.pi, 1.05*np.pi, 1.0],
-        n=[129,65,257],
+        xmax=[3.5*np.pi, 2.4*np.pi, 1.0],
+        n=[129,129,129],
         bases=["fourier", "fourier","chebyshev"]
     )
     i=0

@@ -7,7 +7,7 @@ program tcheby_1d
    use m_adjoint_tool
    use m_fourier_transform
    use m_tensor_product
-   
+   use m_udf_mms
    use m_hdf5_ifce
    use mpi
    use decomp_2d
@@ -43,8 +43,10 @@ program tcheby_1d
    
    real(kind=8) :: dirichl(2),neumann(2)  
    integer :: n(3),cpu_grid(2),ierr
-   REAL(kind=8) ::  xmin(3), xmax(3),err,err_span,err_reste
+   REAL(kind=8) ::  xmin(3), xmax(3),err(3),err_span,err_reste,err_pres(3)
    REAL(kind=8) ::  tc
+
+  real(kind=8) :: inf_norm(3)
    
    TYPE(DECOMP_INFO) :: ph
    
@@ -97,7 +99,7 @@ program tcheby_1d
    REAL(KIND=8),DIMENSION(3) :: NU_MOMENTUM
    REAL(KIND=8),DIMENSION(3) :: NU_ENERGY
    REAL(KIND=8),DIMENSION(3) :: NU_POISSON
-   REAL(kind=8) :: sigma,alpha_buoy,noise,res,nl_cfl,integ
+   REAL(kind=8) :: sigma,alpha_buoy,noise,res,nl_cfl,integ,nu
    
    LOGICAL :: do_adj = .FALSE.
    
@@ -127,23 +129,10 @@ program tcheby_1d
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/dump' )
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//'/save' )
       CALL EXECUTE_COMMAND_LINE('mkdir -p '//trim(root_dir)//trim(snap_dir) )
-      CALL EXECUTE_COMMAND_LINE('mkdir -p output_couette')
       write(6,parameters_cube)
       flush(6)
       OPEN(UNIT=42, FILE=TRIM(TRIM(root_dir)//'timevar'))
-      OPEN(UNIT=50, FILE='output_couette/Pushover.dat')
-      OPEN(UNIT=60, FILE='output_couette/Liftup.dat')
-      OPEN(UNIT=61, FILE='output_couette/Liftup_rotated.dat')
-      OPEN(UNIT=62, FILE='output_couette/Liftup_rotated_inv.dat')
-      OPEN(UNIT=110, FILE='output_couette/Orr_reste.dat')
-      OPEN(UNIT=111, FILE='output_couette/x_Orr_reste.dat')
-      OPEN(UNIT=112, FILE='output_couette/y_Orr_reste.dat')
-      OPEN(UNIT=113, FILE='output_couette/z_Orr_reste.dat')
-      OPEN(UNIT=70, FILE='output_couette/Orr_span.dat')
-      OPEN(UNIT=71, FILE='output_couette/x_Orr_span.dat')
-      OPEN(UNIT=72, FILE='output_couette/y_Orr_span.dat')
-      OPEN(UNIT=73, FILE='output_couette/z_Orr_span.dat')
-      OPEN(UNIT=80, FILE='output_couette/L2_nrj.dat')
+      OPEN(UNIT=50, FILE='erreur.dat')
    end if
    
    
@@ -195,7 +184,8 @@ program tcheby_1d
    
    if (rank ==0)write(6,*)trim(data_start);flush(6)
    
-   if (rank ==0)write(6,*)xmin,xmax;flush(6)
+   if (rank ==0)write(6,*)xmin(1:3);flush(6)
+   if (rank ==0)write(6,*)xmax(1:3);flush(6)
    if (rank ==0)write(6,*)"q : ",q;flush(6)
    nb_iter = floor(tmax/dt)
 
@@ -240,6 +230,8 @@ program tcheby_1d
    
    NU_MOMENTUM = -  1._DP/Re
    NU_POISSON  =  1.
+
+   nu = -1._DP/Re
    
    CALL EQN_U%SET_PARAMS( NU=NU_MOMENTUM , SIGMA=0D0 )
    CALL EQN_U%SET_BCS( AXIS=3 , BCS_MINUS=DIRICHL , BCS_PLUS=DIRICHL )
@@ -267,26 +259,104 @@ program tcheby_1d
    
    call preproc()
 
+   
+   FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
+      U(I,J,K) = UDF_U_EX(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+      V(I,J,K) = UDF_V_EX(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+      W(I,J,K) = UDF_W_EX(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+   END FORALL
+   
+   ! to 
+   CALL COMPUTE_NON_LINEAR_TERMS(&
+        OPX,OPY,OPZ, U, V, W , NLU, NLV, NLW,&
+        DG01, DG02, DG03, DG04, DG05, DG06, DG07, DG08, DG09)
 
-   ! Lecture de la condition initiale
-   !CALL IMPORT_HDF5_INIT(TRIM(init_file),U,V,W,T)
+!   FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
+!      NLU(I,J,K) = 4*(2*cos(x(I,J,K)) - 2*pi*cos(y(I,J,K))**2*cos(pi*z(I,J,K))**2 + pi*cos(y(I,J,K))**2 - 2*pi*cos(pi*z(I,J,K))**2 + pi)*sin(x(I,J,K))**3*sin(2*pi*z(I,J,K))**2
+!      NLV(I,J,K) = 8*(-4*pi*sin(pi*z(I,J,K))**2*cos(x(I,J,K)) + 2*pi*cos(x(I,J,K)) - pi**2 - 1)*sin(x(I,J,K))**2*sin(y(I,J,K))*sin(2*pi*z(I,J,K))**2*cos(y(I,J,K))
+!      NLW(I,J,K) = 2*(-cos(x(I,J,K))*cos(y(I,J,K))**2 - cos(x(I,J,K)) + 4*pi*cos(pi*z(I,J,K))**2 - 2*pi)*sin(x(I,J,K))**2*sin(2*pi*z(I,J,K))**3
+!   END FORALL
+
 
    
-   UM1 = U
-   VM1 = V
-   WM1 = W
+   call get_inf_norm(TC,X,Y,Z,nlu,UDF_nlu,INF_NORM(1))
+   call get_inf_norm(TC,X,Y,Z,nlv,UDF_nlv,INF_NORM(2))
+   call get_inf_norm(TC,X,Y,Z,nlw,UDF_nlw,INF_NORM(3))
    
+   if (rank==0) then
+      print'("nonlinear terms ",3(e15.8,1x))',INF_NORM
+  end if
+  
+  
+  
+  FORALL(I=ph%XST(1):ph%XEN(1),J=ph%XST(2):ph%XEN(2),K=ph%XST(3):ph%XEN(3))
+     SU(I,J,K) = NU*UDF_lx(TC,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     SV(I,J,K) = NU*UDF_ly(TC,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     SW(I,J,K) = NU*UDF_lz(TC,X(I,J,K),Y(I,J,K),Z(I,J,K))
+  END FORALL
+  
+  EQN_U%SIGMA = 0.0
+  EQN_V%SIGMA = 0.0
+  EQN_W%SIGMA = 0.0
+
+  SIGMA = 0
+  
+  CALL EQN_U%SOLVE(U,SU,SIGMA,PH)
+  CALL EQN_V%SOLVE(V,SV,SIGMA,PH)
+  CALL EQN_W%SOLVE(W,SW,SIGMA,PH)
+
+  FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+     DG01(I,J,K) = ABS(U(I,J,K) - udf_U_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+     DG02(I,J,K) = ABS(V(I,J,K) - udf_V_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+     DG03(I,J,K) = ABS(W(I,J,K) - udf_W_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+  END FORALL
+  
+  err(1) = MAXVAL(DG01)
+  err(2) = MAXVAL(DG02)
+  err(3) = MAXVAL(DG03)
+  CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)      
+  
+  
+  !CALL GET_INF_NORM(TC,X,Y,Z,U,UDF_U_EX,INF_NORM(1))
+  !CALL GET_INF_NORM(TC,X,Y,Z,V,UDF_V_EX,INF_NORM(2))
+  !CALL GET_INF_NORM(TC,X,Y,Z,W,UDF_W_EX,INF_NORM(3))
+  
+  if (rank==0) then
+     print'("equation u v w  ",3(e15.8,1x))',err
+  end if
+
+!  call mpi_finalize(ierr)
+!  stop
+  
+  ! Lecture de la condition initiale
+  FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+     U(I,J,K) = udf_U_ex(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     V(I,J,K) = udf_V_ex(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     W(I,J,K) = udf_W_ex(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     UM1(I,J,K) = udf_U_ex(-dt,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     VM1(I,J,K) = udf_V_ex(-dt,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     WM1(I,J,K) = udf_W_ex(-dt,X(I,J,K),Y(I,J,K),Z(I,J,K))
+     PRES(I,J,K) = udf_p_ex(0._DP,X(I,J,K),Y(I,J,K),Z(I,J,K))
+   END FORALL
+
+
+   
+      
    tc = 0
    snap_dt = 0
    J_U = 0._DP
+   
+   
+   
+!   call mpi_finalize(ierr)
+!   stop
 
-
-
-   FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
-      U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
-   END FORALL
+!   FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+!      U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
+!   END FORALL
 
    call dealiazing(u,v,w) 
+   !CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 !   CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
    CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
@@ -308,8 +378,8 @@ program tcheby_1d
    DO IT_time=1,nb_iter
       
       !pas de temps adaptatif                                                                                          
-      call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
-      CALL UPDATE_DT(dt,cfl,0.2_DP)
+!      call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
+!      CALL UPDATE_DT(dt,cfl,0.05_DP)
       
       tc = tc + dt
       snap_dt = snap_dt + dt
@@ -329,9 +399,9 @@ program tcheby_1d
       WM1=W
 
 
-      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
-         U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
-      END FORALL
+!      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+!         U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
+!      END FORALL
      
       call dealiazing(u,v,w)
       
@@ -363,6 +433,12 @@ program tcheby_1d
       NLUM1 = NLU
       NLVM1 = NLV
       NLWM1 = NLW
+
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         SU(I,J,K) = SU(I,J,K) + udf_FX(TC,X(I,J,K),Y(I,J,K),Z(I,J,K),NU,Q)
+         SV(I,J,K) = SV(I,J,K) + udf_FY(TC,X(I,J,K),Y(I,J,K),Z(I,J,K),NU,Q)
+         SW(I,J,K) = SW(I,J,K) + udf_FZ(TC,X(I,J,K),Y(I,J,K),Z(I,J,K),NU,Q)
+      END FORALL
       
       SIGMA = 1.5_DP/DT
       
@@ -372,8 +448,8 @@ program tcheby_1d
             
       call DIV( OPX, OPY, OPZ, U, V, W, SFI, dg01, dg02 , dg03 )
       SFI = SFI*1.5_DP/DT
-      
-      call EQN_P%SOLVE_POISSON(FI,SFI,NU_POISSON,PH)
+      sigma = 0._DP
+      call EQN_P%SOLVE(FI,SFI,sigma,PH)
       
       CALL GRAD(OPX, OPY, OPZ, FI, DG01, DG02, DG03)
       
@@ -410,7 +486,17 @@ program tcheby_1d
       
             
       call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
-      
+
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         DG01(I,J,K) = ABS(U(I,J,K) - udf_U_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+         DG02(I,J,K) = ABS(V(I,J,K) - udf_V_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+         DG03(I,J,K) = ABS(W(I,J,K) - udf_W_ex(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+      END FORALL
+
+      err(1) = MAXVAL(DG01)
+      err(2) = MAXVAL(DG02)
+      err(3) = MAXVAL(DG03)
+      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)      
 
       !Calcul de J(u) = int_domaine <u,u> + <t,t>
       DG04 = U*U
@@ -423,8 +509,22 @@ program tcheby_1d
       CALL integrate_spec(quad,DG06,integ,PH,N(1),N(2),N(3),xmax,xmin)
       J_U = integ + J_U
 
-      if (rank==0) write(6,'(i9,10(1x,e15.8))')it_time,tc,dt,cfl,DIV_MAX,endtime,J_U;flush(6)
+      CALL GRAD(OPX, OPY, OPZ, PRES, DG01, DG02, DG03)
+      FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+         DG04(I,J,K) = ABS(DG01(I,J,K) - udf_grad_P_x(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+         DG05(I,J,K) = ABS(DG02(I,J,K) - udf_grad_P_y(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+         DG06(I,J,K) = ABS(DG03(I,J,K) - udf_grad_P_z(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)))
+      END FORALL
 
+      err_pres(1) = MAXVAL(DG04)
+      err_pres(2) = MAXVAL(DG05)
+      err_pres(3) = MAXVAL(DG06)
+      CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_pres,3,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)      
+      
+      if (rank==0) then
+         write(6,'(i9,11(1x,e15.8))')it_time,tc,dt,cfl,DIV_MAX,endtime,err,err_pres;flush(6)
+         write(50,'(4(1x,e15.8))')tc,err
+      end if
 !      div_max = maxval((U_tot))
 !      CALL MPI_ALLREDUCE(MPI_IN_PLACE,DIV_MAX,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
 !      if (nrank==0) print*,'max U_tot:',div_max
@@ -433,134 +533,21 @@ program tcheby_1d
 
 !      if (nrank==0) print*,'min U_tot:',div_max
       
-      if (rank==0) write(80,*)TC,J_U*0.5_DP;flush(80)
+!      if (rank==0) write(80,*)TC,J_U*0.5_DP;flush(80)
 
-
-      if (mod(it_time,100)==0) then
-         !DG09 = u mode 0 en x -> u_bar
-         !DG08 = u mode 0 en x et y -> u_tilde
-         DGU = U
-    
-         call c2c_1m_x(DGU,plan_fwd_x)
-         DGV = 0._DP
-         DGV(1,:,:) = DGU(1,:,:)
-         DGW = DGV
-         call c2c_1m_x(DGV,plan_bck_x)
-         DG09 = DGV
-
-         call transpose_x_to_y(DGW, DGU_Y)
-         call c2c_1m_y(DGU_Y,plan_fwd_y)
-         DGV_Y = 0._DP
-         DGV_Y(:,1,:) = DGU_Y(:,1,:)
-         call c2c_1m_y(DGV_Y,plan_bck_y)
-         call transpose_y_to_x(DGV_Y, DGU)
-         call c2c_1m_x(DGU,plan_bck_x)
-         DG08 = DGU
-
-
-         !Calcul du lift-up et pushover
-         CALL GRAD( OPX, OPY, OPZ, DG09, DG01, DG02, DG03)
-
-         DG04 = W*DG03*W*DG03
-         DG05 = V*DG02*V*DG02
-
-         CALL integrate_spec(quad,DG04,lift,PH,N(1),N(2),N(3),xmax,xmin)
-         CALL integrate_spec(quad,DG05,push,PH,N(1),N(2),N(3),xmax,xmin)
-         err = MAXVAL(DG04)
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(60,*)TC,lift,err;flush(60)
-
-         err = MAXVAL(DG05)
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-
-         if (rank==0) write(50,*)TC,push,err;flush(50)
-
-
-         !Calcul de Orr spanwise + reste Orr
-         !Composante X
-
-         DG04 = u - DG09
-         CALL GRAD( OPX, OPY, OPZ, DG04, DG01, DG02, DG03)
-
-         DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-         DG06 = DG08*DG01*DG08*DG01
-
-         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_span = orr
-         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_reste = orr
-         err_span  = MAXVAL(DG05)
-         err_reste = MAXVAL(DG06)
-
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(71,*)TC,orr_span,err_span;flush(71)
-
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(111,*)TC,orr_reste,err_reste;flush(111)
-
-         !Composnate Y 
-         CALL GRAD( OPX, OPY, OPZ, V, DG01, DG02, DG03)
-
-         DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-         DG06 = DG08*DG01*DG08*DG01
-
-         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_span = orr_span + orr
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         err = maxval(DG05)
-         if (rank==0) write(72,*)TC,orr,err;flush(72)
-
-         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_reste = orr_reste + orr
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         err = maxval(DG06)
-         if (rank==0) write(112,*)TC,orr,err;flush(112)
-
-         err_span  = MAX(err_span,MAXVAL(DG05))
-         err_reste = MAX(err_reste,MAXVAL(DG06))
-
-
-
-         !Composante Z
+      if (mod(it_time,10)==0) then
+         filename = trim(base_snap)//'grid.h5'
+         call update_id_and_time(trim(filename),snap_dt,snap_id)
+         WRITE(num,'(I6.6)')snap_id
+         filename = trim(base_snap)//num//'.h5'
          
-         CALL GRAD( OPX, OPY, OPZ, W, DG01, DG02, DG03)
-
-         DG05 = (DG09 - DG08)*DG01*(DG09 - DG08)*DG01
-         DG06 = DG08*DG01*DG08*DG01
-
-         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_span = orr_span + orr
-         err = maxval(DG05)
-         if (rank==0) write(73,*)TC,orr,err;flush(73)
-
-         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         orr_reste = orr_reste + orr
-         err = maxval(DG06)
-         if (rank==0) write(113,*)TC,orr,err;flush(113)
-
-         err_span  = MAX(err_span,MAXVAL(DG05))
-         err_reste = MAX(err_reste,MAXVAL(DG06))
-
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_span,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(70,*)TC,orr_span,err_span;flush(70)
-
-         CALL MPI_ALLREDUCE(MPI_IN_PLACE,err_reste,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
-         if (rank==0) write(110,*)TC,orr_reste,err_reste;flush(110)
-
-         !Rotated Lift-up (-qV) et inverse (qU)
+         FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+            U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
+         END FORALL
          
-         DG05 = q*W*q*W
-         DG06 = q*U*q*U
-
-         CALL integrate_spec(quad,DG05,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         err = maxval(DG05)
-         if (rank==0) write(61,*)TC,orr,err;flush(61)
-
-         CALL integrate_spec(quad,DG06,orr,PH,N(1),N(2),N(3),xmax,xmin)
-         err = maxval(DG06)
-         if (rank==0) write(62,*)TC,orr,err;flush(62)
-         
+         call EXPORT_snapshot(trim(FILENAME),u,v,w,pres,U_tot)
       end if
+
       
       if (cfl .GT. 10.) then
          if (rank == 0) print'("CFL TOO BIG.")'
@@ -568,38 +555,15 @@ program tcheby_1d
          stop
       end if
 
-      if (mod(it_time,5000)==0) then
-         CALL streamwise_MOD(U,V,W,SP_X,N(1)/2)
-         CALL zwise_MOD(U,V,W,SP_Z,N(2)/2)
-
-         write(form,'(i3)')n(1)/2
-         write(90,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_x;flush(90)
-         
-         write(form,'(i3)')n(2)/2
-         write(99,'(e15.8,'//TRIM(form)//'(e15.8))') tc,sp_z;flush(100)
-
-      end if
       
-     if (mod(it_time,1000)==0) then
-        filename = trim(base_snap)//'grid.h5'
-        call update_id_and_time(trim(filename),snap_dt,snap_id)
-        WRITE(num,'(I6.6)')snap_id
-        filename = trim(base_snap)//num//'.h5'
-
-        FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
-           U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
-        END FORALL
-
-        call EXPORT_snapshot(trim(FILENAME),u,v,w,pres,U_tot)
-     end if
-
+ 
       
       if (tc>=tmax) exit
 
 
    end DO
    
-   CALL DUMP_HDF5_BASIC(file_dump,'WRITE',TC,DT,msh,u,v,w,Pres,dg09)
+!   CALL DUMP_HDF5_BASIC(file_dump,'WRITE',TC,DT,msh,u,v,w,Pres,dg09)
    
 
    CALL MPI_FINALIZE(ierr)
@@ -833,7 +797,7 @@ program tcheby_1d
       CALL Random_Number(NOISE_V(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       CALL Random_Number(NOISE_W(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       
-      NOISE = 1e-4
+      NOISE = 1.
       
       U = (2._dp*NOISE_U - 1._dp)*NOISE 
       V = (2._dp*NOISE_V - 1._dp)*NOISE
@@ -1344,5 +1308,30 @@ subroutine dealiazing(u,v,w)
     
   end subroutine init
   
+  subroutine get_inf_norm(TC,X,Y,Z,FI,UDF_FI,INF_NORM)
+    implicit none
+    REAL(KIND=8) :: TC
+    procedure(udf_timespace_npure) :: UDF_FI
+    REAL(KIND=8),DIMENSION(:,:,:),ALLOCATABLE :: X,Y,Z,FI
+    REAL(KIND=8) :: INF_NORM,ERR
+    INTEGER :: I,J,K
+    
+    is = get_is()
+    ie = get_ie()
+    
+    INF_NORM = 0.0
+    
+    DO K=is(3),ie(3)
+       DO J=is(2),ie(2)
+          DO I=is(1),ie(1)
+             ERR = abs( UDF_FI(TC,X(I,J,K),Y(I,J,K),Z(I,J,K)) - FI(I,J,K) )
+             INF_NORM = MAX(INF_NORM,ERR)
+          END DO
+       END DO
+    END DO
+    CALL MPI_ALLREDUCE(MPI_IN_PLACE,INF_NORM,1,MPI_REAL8,MPI_MAX,MPI_COMM_WORLD,IERR)
+    
+  END subroutine Get_Inf_Norm
+
   
 end program tcheby_1d

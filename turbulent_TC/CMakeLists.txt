@@ -44,13 +44,15 @@ add_subdirectory(${SRC_DIR} ${BIN_DIR})
 # --- Fichiers sources communs aux exécutables ---
 set(COMMON_SOURCE_FILES
 #   m_udf_mms_adj.f90
-#   m_udf_mms.f90
+   m_udf_mms.f90
 )
 
 # --- Liste des exécutables : nom:source ---
 set(EXECUTABLES
     kerswell.x:kerswell.f90
+    mms_kerswell.x:mms_kerswell.f90
     Q1_kerswell.x:Q1_kerswell.f90
+    restart_Q1_kerswell.x:restart_Q1_kerswell.f90	
     post_kers.x:post_kers.f90
 )
 

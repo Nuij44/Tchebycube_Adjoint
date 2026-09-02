@@ -2,8 +2,8 @@
 nx = 128 ,
 ny = 64 ,
 nz = 256 ,
-x_max = 4.35, !* pi
-y_max = 1.05 ,!* pi
+x_max = 1.75, !* pi
+y_max = 1.2 ,!* pi
 z_max = 1. ,  
 nb_cpu_y = 8 ,
 nb_cpu_z = 12
@@ -11,8 +11,8 @@ nb_cpu_z = 12
 
 
 &parameters_physical
-Re = 1000. ,
-q = 0.,
+Re = 25000. ,
+q = 1.,
 /
 
 

@@ -287,6 +287,7 @@ program tcheby_1d
    END FORALL
 
    call dealiazing(u,v,w) 
+   !CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 !   CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U_tot, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
 
    CALL COMPUTE_NON_LINEAR_TERMS( OPX,OPY,OPZ, U, V, W, NLU, NLV, NLW, dg01, dg02, dg03, dg04, dg05, dg06, dg07, dg08, dg09)
@@ -309,7 +310,7 @@ program tcheby_1d
       
       !pas de temps adaptatif                                                                                          
       call GetCFL(msh(1),msh(2),msh(3), U, V, W, dt, cfl)
-      CALL UPDATE_DT(dt,cfl,0.2_DP)
+      CALL UPDATE_DT(dt,cfl,0.05_DP)
       
       tc = tc + dt
       snap_dt = snap_dt + dt
@@ -568,7 +569,7 @@ program tcheby_1d
          stop
       end if
 
-      if (mod(it_time,5000)==0) then
+      if (mod(it_time,1000)==0) then
          CALL streamwise_MOD(U,V,W,SP_X,N(1)/2)
          CALL zwise_MOD(U,V,W,SP_Z,N(2)/2)
 
@@ -580,17 +581,17 @@ program tcheby_1d
 
       end if
       
-     if (mod(it_time,1000)==0) then
+     if (mod(it_time,40000)==0) then
         filename = trim(base_snap)//'grid.h5'
         call update_id_and_time(trim(filename),snap_dt,snap_id)
         WRITE(num,'(I6.6)')snap_id
         filename = trim(base_snap)//num//'.h5'
 
-        FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
-           U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
-        END FORALL
+!        FORALL(I=PH%XST(1):PH%XEN(1),J=PH%XST(2):PH%XEN(2),K=PH%XST(3):PH%XEN(3))
+!           U_tot(I,J,K) = U(I,J,K) - Z(I,J,K)
+!        END FORALL
 
-        call EXPORT_snapshot(trim(FILENAME),u,v,w,pres,U_tot)
+        call EXPORT_snapshot(trim(FILENAME),u,v,w,pres,U)
      end if
 
       
@@ -833,7 +834,7 @@ program tcheby_1d
       CALL Random_Number(NOISE_V(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       CALL Random_Number(NOISE_W(IS(1):IE(1),IS(2):IE(2),IS(3):IE(3)))
       
-      NOISE = 1e-4
+      NOISE = 1E-2
       
       U = (2._dp*NOISE_U - 1._dp)*NOISE 
       V = (2._dp*NOISE_V - 1._dp)*NOISE
@@ -855,6 +856,7 @@ program tcheby_1d
 
 !      CALL INIT()
 
+      CALL IMPORT_HDF5_INIT_SNAP(TRIM(data_start),U,V,W)
       
       DG04 = U*U
       DG05 = V*V
